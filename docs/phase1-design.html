@@ -1,0 +1,1280 @@
+<title>SlingKing Architecture Brief</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<style>
+:root{
+  --ground:#F5F7F4; --surface:#FFFFFF; --surface-2:#EDF1ED; --surface-3:#E3E9E4;
+  --ink:#171E1A; --ink-2:#38463F; --muted:#66756D; --faint:#8A9A91;
+  --rule:#DBE2DC; --rule-strong:#C1CBC4;
+  --accent:#0C6B57; --accent-soft:#DCEDE6; --accent-line:#0C6B57;
+  --warn:#A65510; --warn-soft:#F7E8D8;
+  --crit:#9C2B2B; --crit-soft:#F6DEDD;
+  --ok:#0C6B57; --ok-soft:#DCEDE6;
+  --shadow:0 1px 2px rgba(20,35,29,.05), 0 10px 28px -16px rgba(20,35,29,.22);
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"Archivo",system-ui,-apple-system,Segoe UI,sans-serif;
+  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0C1310; --surface:#121B17; --surface-2:#17221D; --surface-3:#1D2A24;
+    --ink:#E2EAE5; --ink-2:#BAC8C1; --muted:#8A9B92; --faint:#6B7C73;
+    --rule:#233029; --rule-strong:#324338;
+    --accent:#4FC9A6; --accent-soft:#0F3129; --accent-line:#4FC9A6;
+    --warn:#E19C51; --warn-soft:#33250F;
+    --crit:#E48B86; --crit-soft:#331A19;
+    --ok:#4FC9A6; --ok-soft:#0F3129;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0C1310; --surface:#121B17; --surface-2:#17221D; --surface-3:#1D2A24;
+  --ink:#E2EAE5; --ink-2:#BAC8C1; --muted:#8A9B92; --faint:#6B7C73;
+  --rule:#233029; --rule-strong:#324338;
+  --accent:#4FC9A6; --accent-soft:#0F3129; --accent-line:#4FC9A6;
+  --warn:#E19C51; --warn-soft:#33250F;
+  --crit:#E48B86; --crit-soft:#331A19;
+  --ok:#4FC9A6; --ok-soft:#0F3129;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--ground); color:var(--ink);
+  font-family:var(--serif); font-size:17px; line-height:1.62;
+  -webkit-font-smoothing:antialiased; margin:0;
+}
+::selection{background:var(--accent-soft); color:var(--ink)}
+a{color:var(--accent); text-underline-offset:3px; text-decoration-thickness:1px}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radius:2px}
+
+.masthead{border-bottom:1px solid var(--rule-strong); background:var(--surface)}
+.masthead-inner{max-width:1180px; margin:0 auto; padding:44px 32px 34px;
+  display:flex; flex-wrap:wrap; gap:28px; align-items:flex-end; justify-content:space-between}
+.brandline{display:flex; align-items:center; gap:12px; margin-bottom:14px}
+.mark{width:26px; height:26px; flex:none; color:var(--accent)}
+.brandname{font-family:var(--sans); font-weight:700; font-size:13px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--accent)}
+h1{font-family:var(--sans); font-weight:700; font-size:clamp(30px,4.6vw,46px); line-height:1.06;
+  letter-spacing:-.02em; margin:0 0 12px; text-wrap:balance; max-width:16ch}
+.deck{font-size:18px; color:var(--muted); max-width:52ch; margin:0}
+.stamp{font-family:var(--mono); font-size:11.5px; line-height:1.9; color:var(--muted);
+  border-left:2px solid var(--accent-line); padding-left:14px}
+.stamp b{color:var(--ink); font-weight:500}
+
+.shell{max-width:1180px; margin:0 auto; padding:0 32px 96px;
+  display:grid; grid-template-columns:minmax(0,1fr); gap:0}
+@media(min-width:1080px){
+  .shell{grid-template-columns:210px minmax(0,1fr); gap:64px; padding-top:8px}
+}
+nav.rail{display:none}
+@media(min-width:1080px){
+  nav.rail{display:block; position:sticky; top:0; align-self:start;
+    max-height:100vh; overflow-y:auto; padding:44px 0 40px}
+}
+.rail-title{font-family:var(--sans); font-size:10.5px; font-weight:700; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--faint); margin:0 0 14px}
+.rail ol{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:1px}
+.rail a{display:grid; grid-template-columns:24px 1fr; gap:6px; align-items:baseline;
+  font-family:var(--sans); font-size:13px; line-height:1.4; font-weight:500;
+  color:var(--ink-2); text-decoration:none; padding:6px 8px 6px 0; border-radius:3px}
+.rail a:hover{color:var(--accent); background:var(--surface-2)}
+.rail a span{font-family:var(--mono); font-size:10.5px; color:var(--faint)}
+
+main{padding-top:44px; min-width:0}
+
+section{scroll-margin-top:24px; padding-bottom:12px}
+section + section{margin-top:64px; padding-top:56px; border-top:1px solid var(--rule)}
+.sec-num{font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:.1em;
+  color:var(--accent); display:block; margin-bottom:8px}
+h2{font-family:var(--sans); font-weight:700; font-size:clamp(23px,2.9vw,30px); line-height:1.14;
+  letter-spacing:-.015em; margin:0 0 16px; text-wrap:balance; max-width:22ch}
+h3{font-family:var(--sans); font-weight:600; font-size:17.5px; letter-spacing:-.005em;
+  margin:38px 0 10px; max-width:46ch; text-wrap:balance}
+h4{font-family:var(--sans); font-weight:600; font-size:13px; letter-spacing:.05em;
+  text-transform:uppercase; color:var(--muted); margin:28px 0 8px}
+p,ul,ol{max-width:68ch}
+p{margin:0 0 14px}
+ul,ol{margin:0 0 16px; padding-left:22px}
+li{margin-bottom:6px}
+li::marker{color:var(--faint)}
+strong{font-weight:600; color:var(--ink)}
+em{font-style:italic; color:var(--ink-2)}
+code{font-family:var(--mono); font-size:.855em; background:var(--surface-2);
+  border:1px solid var(--rule); border-radius:3px; padding:1px 5px; color:var(--ink)}
+.lede{font-size:19px; line-height:1.55; color:var(--ink-2); max-width:60ch; margin-bottom:22px}
+
+.note{border:1px solid var(--rule); border-left:3px solid var(--accent-line);
+  background:var(--surface); border-radius:0 5px 5px 0; padding:16px 20px; margin:22px 0; max-width:68ch}
+.note p:last-child{margin-bottom:0}
+.note-label{font-family:var(--sans); font-size:10.5px; font-weight:700; letter-spacing:.13em;
+  text-transform:uppercase; color:var(--accent); display:block; margin-bottom:6px}
+.note.warn{border-left-color:var(--warn)}
+.note.warn .note-label{color:var(--warn)}
+
+.issues{display:grid; gap:1px; background:var(--rule); border:1px solid var(--rule);
+  border-radius:6px; overflow:hidden; margin:26px 0}
+.issue{background:var(--surface); padding:18px 22px; display:grid;
+  grid-template-columns:auto minmax(0,1fr); gap:0 16px; align-items:start}
+.issue-id{font-family:var(--mono); font-size:11px; font-weight:700; color:var(--faint); padding-top:4px}
+.issue-body{min-width:0}
+.issue h4{margin:0 0 5px; font-size:15px; text-transform:none; letter-spacing:-.005em; color:var(--ink)}
+.issue p{font-size:15px; margin:0; color:var(--ink-2); max-width:66ch}
+.issue p + p{margin-top:8px}
+.chip{display:inline-block; font-family:var(--sans); font-size:9.5px; font-weight:700;
+  letter-spacing:.11em; text-transform:uppercase; padding:3px 7px; border-radius:3px;
+  vertical-align:2px; margin-left:9px; white-space:nowrap}
+.chip.block{background:var(--crit-soft); color:var(--crit)}
+.chip.flag{background:var(--warn-soft); color:var(--warn)}
+.chip.set{background:var(--ok-soft); color:var(--ok)}
+.resolve{font-family:var(--sans); font-size:13.5px; color:var(--ink-2);
+  border-top:1px dashed var(--rule-strong); margin-top:10px; padding-top:8px; max-width:66ch}
+.resolve b{font-family:var(--sans); font-weight:700; font-size:10px; letter-spacing:.11em;
+  text-transform:uppercase; color:var(--faint); margin-right:8px}
+
+.tw{overflow-x:auto; margin:22px 0; border:1px solid var(--rule); border-radius:6px; background:var(--surface)}
+table{border-collapse:collapse; width:100%; font-family:var(--sans); font-size:13.5px; line-height:1.45}
+th{text-align:left; font-weight:700; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--muted); padding:11px 16px; border-bottom:1px solid var(--rule-strong);
+  background:var(--surface-2); white-space:nowrap}
+td{padding:10px 16px; border-bottom:1px solid var(--rule); vertical-align:top; color:var(--ink-2)}
+tbody tr:last-child td{border-bottom:0}
+td:first-child{color:var(--ink); font-weight:500}
+td.mono,th.mono{font-family:var(--mono); font-size:12px}
+td.num{text-align:right; font-variant-numeric:tabular-nums; font-family:var(--mono); font-size:12px}
+table code{font-size:11.5px; background:none; border:0; padding:0; color:var(--ink)}
+
+pre{font-family:var(--mono); font-size:12.5px; line-height:1.66; background:var(--surface);
+  border:1px solid var(--rule); border-radius:6px; padding:18px 20px; overflow-x:auto; margin:20px 0;
+  color:var(--ink-2); tab-size:2}
+pre b{color:var(--accent); font-weight:500}
+pre i{color:var(--faint); font-style:normal}
+pre em{color:var(--warn); font-style:normal}
+
+figure{margin:26px 0; border:1px solid var(--rule); border-radius:6px; background:var(--surface);
+  padding:22px 22px 16px; overflow:hidden}
+figure svg{display:block; width:100%; height:auto; max-width:100%; color:var(--ink)}
+figcaption{font-family:var(--sans); font-size:12.5px; line-height:1.5; color:var(--muted);
+  margin-top:14px; padding-top:12px; border-top:1px solid var(--rule); max-width:74ch}
+figcaption b{color:var(--ink-2); font-weight:600}
+
+.tree{font-family:var(--mono); font-size:12.5px; line-height:1.75; background:var(--surface);
+  border:1px solid var(--rule); border-radius:6px; padding:18px 20px; overflow-x:auto;
+  margin:20px 0; color:var(--ink-2); white-space:pre}
+.tree b{color:var(--ink); font-weight:500}
+.tree i{color:var(--faint); font-style:normal}
+
+.ms{display:grid; gap:1px; background:var(--rule); border:1px solid var(--rule);
+  border-radius:6px; overflow:hidden; margin:24px 0}
+.ms-row{background:var(--surface); padding:18px 22px; display:grid;
+  grid-template-columns:86px minmax(0,1fr); gap:0 18px}
+@media(max-width:640px){.ms-row{grid-template-columns:1fr; gap:8px}}
+.ms-tag{font-family:var(--mono); font-size:11px; font-weight:700; color:var(--accent);
+  letter-spacing:.04em; padding-top:3px}
+.ms-row h4{margin:0 0 6px; font-size:15px; text-transform:none; letter-spacing:-.005em; color:var(--ink)}
+.ms-row p{font-size:14.5px; margin:0 0 8px; color:var(--ink-2); max-width:64ch}
+.gate{font-family:var(--sans); font-size:13px; color:var(--ink-2); background:var(--surface-2);
+  border:1px solid var(--rule); border-radius:4px; padding:7px 11px; display:inline-block; max-width:64ch}
+.gate b{font-family:var(--sans); font-size:9.5px; font-weight:700; letter-spacing:.11em;
+  text-transform:uppercase; color:var(--accent); margin-right:8px}
+
+.ep{font-family:var(--mono); font-size:12.5px; line-height:1.9; margin:0 0 20px; max-width:none;
+  border:1px solid var(--rule); border-radius:6px; background:var(--surface); overflow-x:auto}
+.ep div{display:grid; grid-template-columns:64px minmax(0,1fr); gap:10px; align-items:baseline;
+  padding:5px 16px; border-bottom:1px solid var(--rule)}
+.ep div:last-child{border-bottom:0}
+.ep .m{font-weight:700; font-size:10.5px; letter-spacing:.06em; color:var(--accent); text-align:right}
+.ep .m.w{color:var(--warn)}
+.ep .p{color:var(--muted); overflow-wrap:anywhere}
+.ep .p b{color:var(--ink); font-weight:400}
+.ep-group{font-family:var(--sans); font-size:11px; font-weight:700; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--faint); margin:26px 0 8px}
+
+footer{border-top:1px solid var(--rule-strong); background:var(--surface); margin-top:40px}
+.footer-inner{max-width:1180px; margin:0 auto; padding:32px; font-family:var(--sans);
+  font-size:13px; color:var(--muted); display:flex; flex-wrap:wrap; gap:16px; justify-content:space-between}
+</style>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div>
+      <div class="brandline">
+        <svg class="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="2.5" y="14.5" width="19" height="6" rx="1" stroke="currentColor" stroke-width="1.4" opacity=".35"/>
+          <rect x="2.5" y="8.5" width="19" height="6" rx="1" stroke="currentColor" stroke-width="1.4" opacity=".65"/>
+          <rect x="2.5" y="2.5" width="19" height="6" rx="1" fill="currentColor" fill-opacity=".18" stroke="currentColor" stroke-width="1.4"/>
+        </svg>
+        <span class="brandname">SlingKing &nbsp;/&nbsp; Phase 1</span>
+      </div>
+      <h1>Architecture &amp; Data Design</h1>
+      <p class="deck">A modular monolith for bag retail across Instagram, WhatsApp and offline &mdash; built on one central inventory ledger with FIFO costing.</p>
+    </div>
+    <div class="stamp">
+      <b>Stack</b> &nbsp;.NET 8 LTS &middot; EF Core &middot; Supabase<br>
+      <b>Client</b> &nbsp;React 19 &middot; TypeScript &middot; Vite<br>
+      <b>Shape</b> &nbsp;Modular monolith, 4 layers<br>
+      <b>Tables</b> &nbsp;27 &nbsp; <b>Modules</b> &nbsp;10<br>
+      <b>Ship</b> &nbsp;R1 inventory, then R2 sales<br>
+      <b>State</b> &nbsp;Approved &mdash; R1 &#183; M1 next
+    </div>
+  </div>
+</header>
+
+<div class="shell">
+<nav class="rail">
+  <p class="rail-title">Contents</p>
+  <ol>
+    <li><a href="#s1"><span>01</span>Requirement read</a></li>
+    <li><a href="#s2"><span>02</span>Issues to settle</a></li>
+    <li><a href="#s3"><span>03</span>Architecture</a></li>
+    <li><a href="#s4"><span>04</span>Entities</a></li>
+    <li><a href="#s5"><span>05</span>Core schema</a></li>
+    <li><a href="#s6"><span>06</span>FIFO costing</a></li>
+    <li><a href="#s7"><span>07</span>Reservation</a></li>
+    <li><a href="#s8"><span>08</span>Order states</a></li>
+    <li><a href="#s9"><span>09</span>API surface</a></li>
+    <li><a href="#s10"><span>10</span>Frontend</a></li>
+    <li><a href="#s11"><span>11</span>Milestones</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="s1">
+  <span class="sec-num">01</span>
+  <h2>What I understand you are asking for</h2>
+  <p class="lede">One inventory ledger, many ways to sell out of it &mdash; and enough recorded history that a profit number computed today still holds next year.</p>
+
+  <p>The workspace at <code>C:\Hamza Projects\SlingKing</code> is <strong>empty</strong>. Nothing exists yet: no solution, no git repository, no prior schema. This is a greenfield build with no migration or compatibility burden.</p>
+
+  <p>The system's centre of gravity is not orders and it is not products &mdash; it is the <strong>inventory ledger</strong>. Every other module writes into it or reads from it. Getting that ledger's invariants right is what the whole build stands on, which is why the plan below front-loads inventory and defers everything that merely reports on it.</p>
+
+  <h3>The four things the design has to get right</h3>
+  <ul>
+    <li><strong>Stock is derived, not stored.</strong> A mutable <code>current_stock</code> column drifts. The truth is an append-only transaction ledger; the fast-read numbers are a projection guarded by database constraints and reconcilable against the ledger at any time.</li>
+    <li><strong>Costs are layered, not averaged.</strong> FIFO means every unit in stock carries the price you actually paid for it, and every sale records precisely which of those units it consumed. That record is what makes historical profit immune to later price changes.</li>
+    <li><strong>Reservation is separate from consumption.</strong> Confirming an Instagram order must protect stock without removing it; only delivery removes it. Two different quantities, two different transaction types, one atomic guard against overselling.</li>
+    <li><strong>Channels are data, not code.</strong> Instagram, WhatsApp and Offline differ by configuration rows, not by branches in the order service. Meesho and Flipkart later become an adapter plus a row &mdash; not a change to any core module.</li>
+  </ul>
+
+  <h3>Environment as verified</h3>
+  <div class="tw"><table>
+    <thead><tr><th>Component</th><th>Found</th><th>Decision</th></tr></thead>
+    <tbody>
+      <tr><td>.NET SDK</td><td class="mono">8.0.408 (LTS), 9.0.306 (STS)</td><td>Target <strong>net8.0</strong> &mdash; 9 is STS, and you asked for LTS</td></tr>
+      <tr><td>Node / npm</td><td class="mono">v22.22.2 / 10.9.7</td><td>Vite 7 + React 19 supported</td></tr>
+      <tr><td>PostgreSQL</td><td class="mono">not installed locally &mdash; and not needed</td><td>One Supabase project, hosted. <code>public</code> schema for real data, <code>test</code> schema for the suite</td></tr>
+      <tr><td>Docker</td><td class="mono">28.5.1, installed but unused</td><td>Not required by this design; Render builds the API image server-side</td></tr>
+      <tr><td>git</td><td class="mono">2.45.0, repo not initialised</td><td><code>git init</code> in Phase 2</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="s2">
+  <span class="sec-num">02</span>
+  <h2>Issues and ambiguities before a line is written</h2>
+  <p class="lede">Both blockers are now answered and closed below. The rest I have decided with a stated default &mdash; overturn any of them and I will adjust.</p>
+
+  <h4>Were blocking &mdash; now resolved</h4>
+  <div class="issues">
+    <div class="issue">
+      <div class="issue-id">B1</div>
+      <div class="issue-body">
+        <h4>Cost price is entered per SKU, per entry &mdash; and the field is optional<span class="chip set">Resolved</span></h4>
+        <p>Cost is captured on each opening-stock row and each purchase line, so two intakes of the same SKU at different prices remain two layers and the FIFO queue works as designed. A single editable &ldquo;cost price&rdquo; on the variant was considered and rejected: changing it later would silently rewrite the profit on every past sale.</p>
+        <p>The field is <strong>optional</strong>. A blank cost opens the layer with <code>unit_cost = null</code>, which means <em>unknown</em>, never zero. Quantities, reservations and the oversell guard are untouched &mdash; only money is affected, and the system reports the gap rather than hiding it. Section 06 covers how consumption, backfill and report coverage handle an uncosted layer.</p>
+        <div class="resolve"><b>Answer</b>Cost price per SKU per entry, optional; uncosted units are surfaced, not assumed free</div>
+      </div>
+    </div>
+    <div class="issue">
+      <div class="issue-id">B2</div>
+      <div class="issue-body">
+        <h4>GST is out of scope entirely<span class="chip set">Resolved</span></h4>
+        <p>No tax fields anywhere: not on <code>purchases</code>, <code>purchase_items</code>, <code>orders</code> or <code>order_items</code>, and no <code>tax_treatment</code> column on <code>sales_channels</code>. Every price and every cost is a single final amount. A cost layer holds exactly the number that was typed, with no ex-GST arithmetic to get backwards.</p>
+        <p>This removes columns from the design rather than adding them, and it is why the schema below is simpler than the first draft. When Meesho and Flipkart integration arrives after Release 2, GST returns as an additive migration &mdash; HSN codes, tax rates, a channel tax treatment &mdash; scoped and costed as its own piece of work rather than smeared through Release 1.</p>
+        <div class="resolve"><b>Answer</b>No GST modelling in either release; revisit at marketplace integration</div>
+      </div>
+    </div>
+  </div>
+
+  <h4>Decided with a default &mdash; say the word to change any</h4>
+  <div class="issues">
+    <div class="issue">
+      <div class="issue-id">D1</div>
+      <div class="issue-body">
+        <h4>Revenue and COGS are recognised on delivery, not on order date<span class="chip set">Decided</span></h4>
+        <p>An order confirmed on 28 March and delivered on 2 April counts in April. Cost and revenue must land in the same period or gross profit is nonsense, and the cost is only knowable once the FIFO layers are consumed at delivery. Every financial report therefore filters on <code>completed_at</code>, while operational lists filter on <code>order_date</code>.</p>
+      </div>
+    </div>
+    <div class="issue">
+      <div class="issue-id">D2</div>
+      <div class="issue-body">
+        <h4>Shipping charged to the customer is not product revenue<span class="chip set">Decided</span></h4>
+        <p>Gross Profit = product revenue after discounts &minus; FIFO COGS. Shipping <em>collected</em> shows as its own line and rolls into net profit; shipping <em>paid</em> is a Shipping expense. Folding courier charges into revenue would flatter your product margin, which is the one number you will actually make buying decisions on.</p>
+      </div>
+    </div>
+    <div class="issue">
+      <div class="issue-id">D3</div>
+      <div class="issue-body">
+        <h4>Order-level discount is allocated pro-rata across lines<span class="chip set">Decided</span></h4>
+        <p>You asked for product-wise and variant-wise sales reports. A &#8377;300 discount sitting only on the order header cannot be attributed to any product, so those reports would silently overstate every line. Each order item stores an <code>allocated_order_discount</code> computed by line share at completion, with the rounding remainder pushed onto the largest line so the parts always sum exactly to the whole.</p>
+      </div>
+    </div>
+    <div class="issue">
+      <div class="issue-id">D4</div>
+      <div class="issue-body">
+        <h4>Returns reverse the original FIFO consumption &mdash; they do not create a new layer<span class="chip set">Decided</span></h4>
+        <p>Restocking a return as a fresh layer at today's cost would let you launder margin: sell cheap stock, return it, and it reappears valued differently. Instead the consumption records for that order item are reversed newest-first, quantity flows back into the exact layers it came from, and COGS is credited at the exact rate it was charged. The restored units keep their original position in the FIFO queue, which is also just correct.</p>
+      </div>
+    </div>
+    <div class="issue">
+      <div class="issue-id">D5</div>
+      <div class="issue-body">
+        <h4>Damaged returns are restocked, then immediately written off<span class="chip set">Decided</span></h4>
+        <p>Rather than a special cost path, a return marked <em>Damaged</em> runs the normal reversal and is then consumed straight back out as a <code>Damage</code> transaction in the same database transaction. Revenue reverses, COGS reverses, and the loss lands in its own bucket where you can see it &mdash; instead of quietly deflating your product margin.</p>
+      </div>
+    </div>
+    <div class="issue">
+      <div class="issue-id">D6</div>
+      <div class="issue-body">
+        <h4>Partial fulfilment is out of scope; partial <em>returns</em> are in<span class="chip flag">Deferred</span></h4>
+        <p>Your brief says "handle partial order fulfilment carefully if implemented". Splitting one order into several shipments means split reservations, split FIFO consumption, and per-shipment status &mdash; roughly a doubling of the order module for a case a single-operator Instagram shop rarely hits. Orders ship whole; lines can be removed while Draft or Confirmed. Partial returns are fully supported, as specified.</p>
+      </div>
+    </div>
+    <div class="issue">
+      <div class="issue-id">D7</div>
+      <div class="issue-body">
+        <h4>Shipped can be cancelled; Delivered cannot<span class="chip set">Decided</span></h4>
+        <p>An RTO happens after dispatch and before physical stock has moved, so <code>Shipped &rarr; Cancelled</code> simply releases the reservation. Once <code>Delivered</code> or <code>Completed</code>, stock and cost have moved and the only correct instrument is a Return &mdash; cancellation is blocked, so you can never erase a completed sale from history.</p>
+      </div>
+    </div>
+    <div class="issue">
+      <div class="issue-id">D8</div>
+      <div class="issue-body">
+        <h4>Your payment status list has a gap: partial refunds<span class="chip flag">Amended</span></h4>
+        <p>Pending / PartiallyPaid / Paid / Refunded cannot express "paid &#8377;3,000, refunded &#8377;800 for one returned item" &mdash; the common outcome of a partial return. I am adding <strong>PartiallyRefunded</strong>. Status stays fully derived from the payment rows; there is no editable status field anywhere.</p>
+      </div>
+    </div>
+    <div class="issue">
+      <div class="issue-id">D9</div>
+      <div class="issue-body">
+        <h4>An upward stock adjustment always opens a layer, costed or not<span class="chip flag">Amended</span></h4>
+        <p>The system-wide invariant is <code>SUM(layer.remaining_qty) = physical_qty</code> per variant. An adjustment that increases stock without creating a cost layer breaks it permanently, and every FIFO calculation after that point is wrong. Upward adjustments therefore <em>always</em> open a layer &mdash; but in line with B1 the unit cost on it is optional, and a blank one leaves the layer uncosted rather than blocking the adjustment. The quantity invariant holds either way; only the valuation is deferred. Downward adjustments consume FIFO like any other outflow.</p>
+      </div>
+    </div>
+    <div class="issue">
+      <div class="issue-id">D10</div>
+      <div class="issue-body">
+        <h4>Offline orders never reserve<span class="chip set">Decided</span></h4>
+        <p>Reservation exists to hold stock between a promise and a handover. Across a counter there is no gap, so <code>Draft &rarr; Completed</code> checks availability and moves physical stock directly &mdash; one transaction, no reservation row. Applying the online path to counter sales would litter the ledger with paired reserve/release entries that describe nothing.</p>
+      </div>
+    </div>
+    <div class="issue">
+      <div class="issue-id">D11</div>
+      <div class="issue-body">
+        <h4>A location column exists from day one, hidden in the UI<span class="chip set">Decided</span></h4>
+        <p>You have one location and the UI will not mention it. But retrofitting <code>location_id</code> into stock levels, cost layers and the transaction ledger after a year of data is a genuinely painful migration, whereas carrying one seeded row now costs nothing. This is the one place I am deliberately building ahead of the requirement.</p>
+      </div>
+    </div>
+    <div class="issue">
+      <div class="issue-id">D12</div>
+      <div class="issue-body">
+        <h4>Completed purchases can only be cancelled if untouched<span class="chip set">Decided</span></h4>
+        <p>If any unit from a purchase has already been sold, reversing that purchase would leave sales consuming layers that no longer exist. Cancellation is permitted only while every layer from that purchase is fully unconsumed; otherwise the correct instrument is a stock adjustment or a supplier return, and the API says so in the error.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s3">
+  <span class="sec-num">03</span>
+  <h2>Proposed architecture</h2>
+  <p class="lede">Four projects, ten modules, one deployable unit. The only structural rule is that dependencies point inward.</p>
+
+  <figure>
+    <svg viewBox="0 0 900 470" role="img" aria-label="Four-layer dependency diagram: API depends on Application, which depends on Domain; Infrastructure implements Application interfaces and maps Domain entities to PostgreSQL. Domain depends on nothing.">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+        </marker>
+        <marker id="ara" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" style="fill:var(--accent)"/>
+        </marker>
+      </defs>
+
+      <rect x="48" y="36" width="548" height="76" rx="4" style="fill:var(--surface-2);stroke:var(--rule-strong)" stroke-width="1"/>
+      <text x="68" y="62" font-family="Archivo,sans-serif" font-size="14" font-weight="700" fill="currentColor">SlingKing.Api</text>
+      <text x="68" y="82" font-family="JetBrains Mono,monospace" font-size="11" style="fill:var(--muted)">Controllers &#183; JWT middleware &#183; ProblemDetails handler</text>
+      <text x="68" y="98" font-family="JetBrains Mono,monospace" font-size="11" style="fill:var(--muted)">Swagger &#183; CORS &#183; Serilog request logging</text>
+
+      <rect x="48" y="142" width="548" height="76" rx="4" style="fill:var(--surface-2);stroke:var(--rule-strong)" stroke-width="1"/>
+      <text x="68" y="168" font-family="Archivo,sans-serif" font-size="14" font-weight="700" fill="currentColor">SlingKing.Application</text>
+      <text x="68" y="188" font-family="JetBrains Mono,monospace" font-size="11" style="fill:var(--muted)">Module services &#183; DTOs &#183; FluentValidation &#183; mappers</text>
+      <text x="68" y="204" font-family="JetBrains Mono,monospace" font-size="11" style="fill:var(--muted)">IAppDbContext &#183; IClock &#183; ISkuGenerator &#183; IFileParser</text>
+
+      <rect x="48" y="248" width="548" height="76" rx="4" style="fill:var(--accent-soft);stroke:var(--accent)" stroke-width="1.4"/>
+      <text x="68" y="274" font-family="Archivo,sans-serif" font-size="14" font-weight="700" style="fill:var(--accent)">SlingKing.Domain</text>
+      <text x="68" y="294" font-family="JetBrains Mono,monospace" font-size="11" style="fill:var(--ink-2)">Entities &#183; enums &#183; state machine &#183; FIFO invariants</text>
+      <text x="68" y="310" font-family="JetBrains Mono,monospace" font-size="11" style="fill:var(--ink-2)">zero project references &#183; zero NuGet packages</text>
+
+      <rect x="648" y="36" width="204" height="288" rx="4" style="fill:var(--surface-2);stroke:var(--rule-strong)" stroke-width="1"/>
+      <text x="668" y="62" font-family="Archivo,sans-serif" font-size="14" font-weight="700" fill="currentColor">Infrastructure</text>
+      <text x="668" y="86" font-family="JetBrains Mono,monospace" font-size="11" style="fill:var(--muted)">AppDbContext</text>
+      <text x="668" y="104" font-family="JetBrains Mono,monospace" font-size="11" style="fill:var(--muted)">EF configurations</text>
+      <text x="668" y="122" font-family="JetBrains Mono,monospace" font-size="11" style="fill:var(--muted)">Migrations</text>
+      <text x="668" y="140" font-family="JetBrains Mono,monospace" font-size="11" style="fill:var(--muted)">Password hashing</text>
+      <text x="668" y="158" font-family="JetBrains Mono,monospace" font-size="11" style="fill:var(--muted)">JWT issuer</text>
+      <text x="668" y="176" font-family="JetBrains Mono,monospace" font-size="11" style="fill:var(--muted)">CSV / XLSX readers</text>
+      <text x="668" y="194" font-family="JetBrains Mono,monospace" font-size="11" style="fill:var(--muted)">Sequence allocator</text>
+      <text x="668" y="232" font-family="JetBrains Mono,monospace" font-size="10.5" style="fill:var(--faint)">a leaf &#8212; no module</text>
+      <text x="668" y="248" font-family="JetBrains Mono,monospace" font-size="10.5" style="fill:var(--faint)">ever references it</text>
+
+      <line x1="180" y1="112" x2="180" y2="140" stroke="currentColor" stroke-width="1.3" marker-end="url(#ar)"/>
+      <text x="192" y="131" font-family="Archivo,sans-serif" font-size="11" style="fill:var(--muted)">calls module services</text>
+      <line x1="180" y1="218" x2="180" y2="246" stroke="currentColor" stroke-width="1.3" marker-end="url(#ar)"/>
+      <text x="192" y="237" font-family="Archivo,sans-serif" font-size="11" style="fill:var(--muted)">reads and mutates entities</text>
+
+      <line x1="644" y1="180" x2="600" y2="180" style="stroke:var(--accent)" stroke-width="1.6" marker-end="url(#ara)"/>
+      <text x="636" y="170" font-family="Archivo,sans-serif" font-size="11" text-anchor="end" style="fill:var(--accent)">implements interfaces</text>
+      <line x1="644" y1="286" x2="600" y2="286" style="stroke:var(--accent)" stroke-width="1.6" marker-end="url(#ara)"/>
+      <text x="636" y="276" font-family="Archivo,sans-serif" font-size="11" text-anchor="end" style="fill:var(--accent)">maps entities</text>
+
+      <rect x="48" y="378" width="804" height="56" rx="4" style="fill:var(--surface-3);stroke:var(--rule-strong)" stroke-width="1"/>
+      <text x="68" y="404" font-family="Archivo,sans-serif" font-size="13" font-weight="600" fill="currentColor">PostgreSQL 16</text>
+      <text x="68" y="422" font-family="JetBrains Mono,monospace" font-size="11" style="fill:var(--muted)">check constraints &#183; generated columns &#183; row locks &#183; explicit transactions</text>
+      <line x1="750" y1="324" x2="750" y2="376" stroke="currentColor" stroke-width="1.3" marker-end="url(#ar)"/>
+      <text x="762" y="356" font-family="Archivo,sans-serif" font-size="11" style="fill:var(--muted)">Npgsql</text>
+    </svg>
+    <figcaption><b>Dependency direction is the whole rule.</b> Domain is a leaf with no references, so business invariants can be unit-tested with no database at all. Application declares what it needs as interfaces; Infrastructure supplies them. Nothing above ever reaches around a layer to talk to Npgsql directly.</figcaption>
+  </figure>
+
+  <h3>Why there is no repository layer</h3>
+  <p>Application services take <code>IAppDbContext</code> and write LINQ directly. A generic <code>IRepository&lt;T&gt;</code> over EF Core wraps an abstraction in a near-identical abstraction, then forces awkward workarounds the moment a query needs a join or a row lock &mdash; which the FIFO consumer needs on its first line. The interface exists so Application does not reference Infrastructure and so tests can swap the context; that is all the indirection this system earns.</p>
+
+  <h3>Module map</h3>
+  <p>Each module is a folder inside Application and Infrastructure, not a separate project. Cross-module calls go through a service interface, never through another module&rsquo;s internal types.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>Module</th><th>Owns</th><th>Depends on</th></tr></thead>
+    <tbody>
+      <tr><td>Catalog</td><td>Products, variants, categories, SKU generation</td><td class="mono">&mdash;</td></tr>
+      <tr><td>Inventory</td><td>Stock levels, transaction ledger, cost layers, consumption, adjustments</td><td class="mono">Catalog</td></tr>
+      <tr><td>Suppliers</td><td>Supplier records</td><td class="mono">&mdash;</td></tr>
+      <tr><td>Purchasing</td><td>Purchases, purchase items, goods receipt</td><td class="mono">Inventory, Suppliers, Catalog</td></tr>
+      <tr><td>Sales</td><td>Channels, customers, orders, items, status machine</td><td class="mono">Inventory, Catalog</td></tr>
+      <tr><td>Payments</td><td>Payment and refund rows, derived payment status</td><td class="mono">Sales</td></tr>
+      <tr><td>Returns</td><td>Returns, return items, FIFO reversal</td><td class="mono">Sales, Inventory, Payments</td></tr>
+      <tr><td>Expenses</td><td>Expense categories and entries</td><td class="mono">&mdash;</td></tr>
+      <tr><td>Reporting</td><td>Dashboard aggregates and all eleven reports</td><td class="mono">read-only, across all</td></tr>
+      <tr><td>Imports</td><td>Template, parse, validate, preview, commit</td><td class="mono">Catalog, Inventory</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note">
+    <span class="note-label">The integration seam</span>
+    <p>Marketplace support is one folder, <code>Application/Integrations/</code>, holding a single interface &mdash; <code>IChannelOrderSource</code> with <code>FetchNewOrdersAsync</code> and <code>PushStatusAsync</code> &mdash; plus an <code>ExternalOrderDto</code>. An adapter translates a Meesho or Flipkart payload into that DTO; one translator turns the DTO into an ordinary <code>CreateOrderCommand</code>. Orders carry <code>external_order_id</code> and <code>external_reference</code> from day one, so no schema change is needed later. No marketplace name ever appears inside Sales or Inventory.</p>
+  </div>
+
+  <h3>Solution layout</h3>
+  <div class="tree"><b>SlingKing/</b>
+&#9500;&#9472; <b>backend/</b>
+&#9474;  &#9500;&#9472; SlingKing.sln
+&#9474;  &#9500;&#9472; <b>src/</b>
+&#9474;  &#9474;  &#9500;&#9472; SlingKing.Domain/          <i>Catalog/ Inventory/ Sales/ &hellip; Common/</i>
+&#9474;  &#9474;  &#9500;&#9472; SlingKing.Application/     <i>one folder per module, plus Common/</i>
+&#9474;  &#9474;  &#9500;&#9472; SlingKing.Infrastructure/  <i>Persistence/ Auth/ Files/ Migrations/</i>
+&#9474;  &#9474;  &#9492;&#9472; SlingKing.Api/             <i>Controllers/ Middleware/ Program.cs</i>
+&#9474;  &#9492;&#9472; <b>tests/</b>
+&#9474;     &#9500;&#9472; SlingKing.UnitTests/        <i>FIFO, state machine, payment status, allocation</i>
+&#9474;     &#9492;&#9472; SlingKing.IntegrationTests/ <i>Supabase test schema, end-to-end flows</i>
+&#9500;&#9472; <b>frontend/</b>                     <i>React 19 + TypeScript + Vite</i>
+&#9500;&#9472; <b>docs/</b>                         <i>this brief</i>
+&#9500;&#9472; backup.ps1                       <i>pg_dump of the live database to a local file</i>
+&#9492;&#9472; .env.example</div>
+</section>
+
+<section id="s4">
+  <span class="sec-num">04</span>
+  <h2>Complete entity list</h2>
+  <p class="lede">Twenty-seven tables. Every column carrying money is <code>numeric</code>, every timestamp is <code>timestamptz</code>, every quantity is a whole-number <code>integer</code>.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>Table</th><th>Key fields beyond Id</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td colspan="3" style="background:var(--surface-2);font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Platform &mdash; 4</td></tr>
+      <tr><td class="mono">users</td><td>email, password_hash, display_name, is_active</td><td>One row in Phase 1; transactional tables already carry <code>created_by</code></td></tr>
+      <tr><td class="mono">refresh_tokens</td><td>user_id, token_hash, expires_at, revoked_at</td><td>Rotating refresh; the hash is stored, never the token</td></tr>
+      <tr><td class="mono">number_sequences</td><td>key, prefix, padding, next_value</td><td>Atomic allocator for ORD / PUR / RET / BAG codes</td></tr>
+      <tr><td class="mono">app_settings</td><td>key, value</td><td>Low-stock default, business name, report toggles</td></tr>
+
+      <tr><td colspan="3" style="background:var(--surface-2);font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Catalog &mdash; 3</td></tr>
+      <tr><td class="mono">categories</td><td>name, is_active</td><td>Extensible list</td></tr>
+      <tr><td class="mono">products</td><td>product_code, name, category_id, description, default_selling_price, is_active</td><td><code>product_code</code> unique, auto-generated as <code>BAG-000001</code></td></tr>
+      <tr><td class="mono">product_variants</td><td>product_id, variant_sku, color, size, selling_price, low_stock_threshold, is_active</td><td>Unique on <code>(product_id, color, size)</code> and on <code>variant_sku</code></td></tr>
+
+      <tr><td colspan="3" style="background:var(--surface-2);font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Inventory &mdash; 5, the core</td></tr>
+      <tr><td class="mono">locations</td><td>name, is_default</td><td>One seeded row, hidden in the UI &mdash; see D11</td></tr>
+      <tr><td class="mono">stock_levels</td><td>variant_id, location_id, physical_qty, reserved_qty, available_qty</td><td>Projection. PK <code>(variant_id, location_id)</code>; <code>available_qty</code> is generated</td></tr>
+      <tr><td class="mono">inventory_transactions</td><td>variant_id, location_id, type, physical_delta, reserved_delta, unit_cost, total_cost, reference_type, reference_id, reason, notes, occurred_at</td><td>Append-only ledger. The source of truth for stock</td></tr>
+      <tr><td class="mono">inventory_cost_layers</td><td>variant_id, location_id, source_type, source_id, received_at, original_qty, remaining_qty, unit_cost</td><td>One FIFO layer per receipt of goods</td></tr>
+      <tr><td class="mono">inventory_cost_consumptions</td><td>cost_layer_id, inventory_transaction_id, order_item_id, quantity, reversed_qty, unit_cost, total_cost</td><td>Exactly which layers a sale ate. Makes return reversal possible</td></tr>
+
+      <tr><td colspan="3" style="background:var(--surface-2);font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Suppliers &amp; Purchasing &mdash; 3</td></tr>
+      <tr><td class="mono">suppliers</td><td>name, phone, address, notes, is_active</td><td></td></tr>
+      <tr><td class="mono">purchases</td><td>purchase_number, supplier_id, purchase_date, status, notes, items_subtotal, other_charges, total_amount</td><td>Draft / Completed / Cancelled</td></tr>
+      <tr><td class="mono">purchase_items</td><td>purchase_id, variant_id, quantity, unit_cost, total_cost</td><td>Unit cost frozen; edits blocked once Completed</td></tr>
+
+      <tr><td colspan="3" style="background:var(--surface-2);font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Sales &mdash; 5</td></tr>
+      <tr><td class="mono">sales_channels</td><td>code, name, requires_shipping, uses_reservation, is_active, sort_order</td><td>Behaviour is data. A new channel is a new row</td></tr>
+      <tr><td class="mono">customers</td><td>name, phone, address, instagram_username, notes</td><td>Partial unique index on normalised phone and lowercased handle</td></tr>
+      <tr><td class="mono">orders</td><td>order_number, order_date, sales_channel_id, customer_id, status, items_subtotal, order_discount, shipping_charge, total_amount, amount_paid, payment_status, confirmed_at, shipped_at, completed_at, cancelled_at, external_order_id, external_reference</td><td><code>amount_paid</code> and <code>payment_status</code> are derived, never user-set</td></tr>
+      <tr><td class="mono">order_items</td><td>order_id, variant_id, product_name_snapshot, variant_sku_snapshot, quantity, unit_selling_price, line_discount, line_total, allocated_order_discount, net_revenue, cogs_amount</td><td>Price and name frozen at creation; <code>cogs_amount</code> filled at completion</td></tr>
+      <tr><td class="mono">order_status_history</td><td>order_id, from_status, to_status, changed_at, changed_by, notes</td><td>Every transition, without exception</td></tr>
+
+      <tr><td colspan="3" style="background:var(--surface-2);font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Payments &amp; Returns &mdash; 3</td></tr>
+      <tr><td class="mono">payments</td><td>order_id, payment_date, direction, amount, method, reference_id, notes</td><td>A refund is <code>direction = Refund</code>, not a separate table</td></tr>
+      <tr><td class="mono">returns</td><td>return_number, order_id, return_date, status, reason, refund_amount, notes</td><td></td></tr>
+      <tr><td class="mono">return_items</td><td>return_id, order_item_id, quantity, condition, refund_amount, cogs_reversed_amount</td><td>Condition is Sellable or Damaged &mdash; see D5</td></tr>
+
+      <tr><td colspan="3" style="background:var(--surface-2);font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Expenses &amp; Imports &mdash; 4</td></tr>
+      <tr><td class="mono">expense_categories</td><td>name, is_system, is_active</td><td>Seeded with your seven, user-extensible</td></tr>
+      <tr><td class="mono">expenses</td><td>expense_date, expense_category_id, amount, description, sales_channel_id</td><td>Channel optional, enabling per-channel net profit</td></tr>
+      <tr><td class="mono">import_batches</td><td>type, file_name, status, row_count, valid_count, error_count, committed_at</td><td>Persists between upload and confirmation</td></tr>
+      <tr><td class="mono">import_rows</td><td>import_batch_id, row_number, raw_data, status, errors</td><td><code>jsonb</code> payload and error list; drives the preview screen</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>The relationships that carry weight</h3>
+  <ul>
+    <li><code>products 1&mdash;N product_variants</code> &mdash; and <strong>every</strong> inventory relationship hangs off the variant, never the product. There is no such thing as product-level stock in this system.</li>
+    <li><code>product_variants 1&mdash;1 stock_levels</code> per location and <code>1&mdash;N inventory_transactions</code>. The one-to-one row is a cache of the one-to-many ledger, and can be rebuilt from it.</li>
+    <li><code>inventory_cost_layers N&mdash;N inventory_transactions</code>, resolved through <code>inventory_cost_consumptions</code>. This join table is the heart of FIFO: it is what lets you ask, two years later, exactly which &#8377;500 bag left the shelf on which order.</li>
+    <li><code>orders 1&mdash;N order_items 1&mdash;N return_items</code> &mdash; a return always points at the original line, so returned quantity can never exceed what was sold on it.</li>
+    <li><code>orders 1&mdash;N payments</code>, summed into <code>amount_paid</code>. No route in the API writes <code>payment_status</code>.</li>
+  </ul>
+</section>
+
+<section id="s5">
+  <span class="sec-num">05</span>
+  <h2>Core schema, where correctness is enforced</h2>
+  <p class="lede">The rules that must never break are written as database constraints, not as C# validation. Application code can have bugs; a check constraint cannot be bypassed by one.</p>
+
+  <h4>Type conventions</h4>
+  <div class="tw"><table>
+    <thead><tr><th>Kind</th><th>Type</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Money &mdash; totals, prices</td><td class="mono">numeric(18,2)</td><td>Exact decimal. Never <code>float</code> for currency</td></tr>
+      <tr><td>Unit cost inside layers</td><td class="mono">numeric(18,4)</td><td>Four places absorb allocation rounding before it reaches a total</td></tr>
+      <tr><td>Quantity</td><td class="mono">integer</td><td>Bags are whole units; fractional stock is a bug, not a feature</td></tr>
+      <tr><td>Timestamp</td><td class="mono">timestamptz</td><td>Stored UTC, rendered in IST. Reports use IST day boundaries</td></tr>
+      <tr><td>Enum</td><td class="mono">smallint</td><td>Mapped to a C# enum; stable across renames, cheap to index</td></tr>
+    </tbody>
+  </table></div>
+
+  <p class="pre-cap">stock_levels &mdash; the fast-read projection</p>
+  <pre><b>create table</b> stock_levels (
+  variant_id    bigint  <b>not null references</b> product_variants(id),
+  location_id   int     <b>not null references</b> locations(id),
+  physical_qty  integer <b>not null default</b> 0,
+  reserved_qty  integer <b>not null default</b> 0,
+  available_qty integer <b>generated always as</b> (physical_qty - reserved_qty) <b>stored</b>,
+  updated_at    timestamptz <b>not null default</b> now(),
+  <b>primary key</b> (variant_id, location_id),
+  <b>constraint</b> ck_physical_non_negative <b>check</b> (physical_qty &gt;= 0),
+  <b>constraint</b> ck_reserved_non_negative <b>check</b> (reserved_qty &gt;= 0),
+  <b>constraint</b> ck_reserved_within_physical <b>check</b> (reserved_qty &lt;= physical_qty)
+);</pre>
+  <p>Available stock is a <em>generated column</em>, so it cannot disagree with its inputs &mdash; there is no code path that computes it. The three checks are the negative-stock guarantee: any bug that tries to drive physical below zero, or reserve more than exists, aborts its whole transaction at the database rather than writing a number nobody notices for a month.</p>
+
+  <p class="pre-cap">inventory_cost_layers &mdash; the FIFO queue</p>
+  <pre><b>create table</b> inventory_cost_layers (
+  id            bigserial <b>primary key</b>,
+  variant_id    bigint  <b>not null references</b> product_variants(id),
+  location_id   int     <b>not null references</b> locations(id),
+  source_type   smallint <b>not null</b>,        <i>-- OpeningStock | Purchase | ReturnRestock | AdjustmentIn</i>
+  source_id     bigint  <b>not null</b>,
+  received_at   timestamptz <b>not null</b>,
+  original_qty  integer <b>not null check</b> (original_qty &gt; 0),
+  remaining_qty integer <b>not null check</b> (remaining_qty &gt;= 0),
+  unit_cost     numeric(18,4) <b>null check</b> (unit_cost &gt;= 0),   <i>-- null = cost not known yet</i>
+  created_at    timestamptz <b>not null default</b> now(),
+  <b>constraint</b> ck_remaining_within_original <b>check</b> (remaining_qty &lt;= original_qty)
+);
+
+<i>-- partial index: only open layers are ever scanned by the FIFO consumer</i>
+<b>create index</b> ix_layers_fifo <b>on</b> inventory_cost_layers
+  (variant_id, location_id, received_at, id) <b>where</b> remaining_qty &gt; 0;</pre>
+  <p>Ordering is <code>(received_at, id)</code>, not <code>id</code> alone &mdash; a purchase entered late but dated earlier still takes its rightful place at the front of the queue. The tiebreaker on <code>id</code> makes the order total and deterministic, which is what lets the FIFO tests assert exact results.</p>
+
+  <p class="pre-cap">inventory_cost_consumptions &mdash; the audit trail that makes returns possible</p>
+  <pre><b>create table</b> inventory_cost_consumptions (
+  id                       bigserial <b>primary key</b>,
+  cost_layer_id            bigint <b>not null references</b> inventory_cost_layers(id),
+  inventory_transaction_id bigint <b>not null references</b> inventory_transactions(id),
+  order_item_id            bigint <b>null references</b> order_items(id),
+  quantity                 integer <b>not null check</b> (quantity &gt; 0),
+  reversed_qty             integer <b>not null default</b> 0 <b>check</b> (reversed_qty &gt;= 0),
+  unit_cost                numeric(18,4) <b>null</b>,      <i>-- copied from the layer at consumption time</i>
+  total_cost               numeric(18,2) <b>null</b>,
+  consumed_at              timestamptz <b>not null</b>,
+  <b>constraint</b> ck_reversed_within_quantity <b>check</b> (reversed_qty &lt;= quantity)
+);</pre>
+  <p>Cost is copied onto the consumption row rather than joined from the layer, so that editing a price next year cannot rewrite last year&rsquo;s profit. Optional costs need one narrow exception to that freeze: filling in a cost for a layer that has already been consumed must repair the rows it produced, or every sale drawn from it stays unknown forever.</p>
+
+  <p class="pre-cap">Backfilling a cost &mdash; the only write that reaches an existing consumption row</p>
+  <pre><b>update</b> inventory_cost_layers
+   <b>set</b> unit_cost = @cost <b>where</b> id = @layerId <b>and</b> unit_cost <b>is null</b>;
+
+<b>update</b> inventory_cost_consumptions
+   <b>set</b> unit_cost = @cost, total_cost = round(quantity * @cost, 2)
+ <b>where</b> cost_layer_id = @layerId <b>and</b> unit_cost <b>is null</b>;   <em>&#8592; the safety property</em></pre>
+  <p>Both statements are guarded by <code>is null</code>. A cost that was once known stays frozen exactly as originally designed; only unknowns can ever be filled. History repairs forward and is never rewritten &mdash; and because the guard lives in the <code>where</code> clause rather than in application code, a double-submitted backfill is harmless.</p>
+
+  <p class="pre-cap">inventory_transactions &mdash; the append-only ledger</p>
+  <pre><b>create table</b> inventory_transactions (
+  id             bigserial <b>primary key</b>,
+  variant_id     bigint <b>not null references</b> product_variants(id),
+  location_id    int    <b>not null references</b> locations(id),
+  type           smallint <b>not null</b>,   <i>-- OpeningStock Purchase Sale Return Damage Loss</i>
+                                  <i>-- PersonalUse Adjustment Reservation ReservationRelease</i>
+  physical_delta integer <b>not null default</b> 0,   <i>signed</i>
+  reserved_delta integer <b>not null default</b> 0,   <i>signed</i>
+  unit_cost      numeric(18,4) <b>null</b>,
+  total_cost     numeric(18,2) <b>null</b>,
+  reference_type smallint <b>null</b>,       <i>-- Order OrderItem Purchase Return ImportBatch</i>
+  reference_id   bigint <b>null</b>,
+  reason         text <b>null</b>,
+  notes          text <b>null</b>,
+  occurred_at    timestamptz <b>not null</b>,
+  created_by     bigint <b>null references</b> users(id),
+  created_at     timestamptz <b>not null default</b> now()
+);</pre>
+  <p>Carrying <em>both</em> deltas on one row is what keeps reservation and consumption in a single ledger. A <code>Reservation</code> writes <code>physical 0, reserved +5</code>; a <code>Sale</code> writes <code>physical &minus;5, reserved &minus;5</code>; a <code>Damage</code> writes <code>physical &minus;2, reserved 0</code>. One table, one timeline, one place to answer &ldquo;where did those bags go?&rdquo;</p>
+
+  <div class="note">
+    <span class="note-label">The two invariants everything else rests on</span>
+    <p>For every variant and location: <code>SUM(physical_delta) = stock_levels.physical_qty</code> and <code>SUM(reserved_delta) = stock_levels.reserved_qty</code>. Independently: <code>SUM(layer.remaining_qty) = stock_levels.physical_qty</code>. A <code>GET /inventory/reconciliation</code> endpoint checks both across the whole catalogue and names any variant that fails. Integration tests assert them after every scenario, so a drift bug fails a test rather than surfacing as a wrong profit number six months on.</p>
+  </div>
+
+  <h3>Sequence allocation</h3>
+  <p>Order and purchase numbers come from a row-locked counter, not from <code>MAX(id) + 1</code>, which races and reuses numbers after a rollback.</p>
+  <pre><b>update</b> number_sequences
+   <b>set</b> next_value = next_value + 1
+ <b>where</b> key = 'order'
+<b>returning</b> prefix, next_value - 1;   <i>-- ORD + 000001 &#8594; ORD-000001</i></pre>
+</section>
+
+<section id="s6">
+  <span class="sec-num">06</span>
+  <h2>FIFO costing</h2>
+  <p class="lede">Every receipt of goods opens a layer. Every sale consumes layers oldest-first and writes down exactly what it took. Your worked example, as the system actually records it:</p>
+
+  <figure>
+    <svg viewBox="0 0 900 352" role="img" aria-label="FIFO consumption of 12 units: layer one of ten units at 500 rupees is fully consumed for 5000 rupees, then two units from layer two at 550 rupees for 1100 rupees, giving cost of goods sold of 6100 rupees and eight units remaining in layer two.">
+      <text x="20" y="26" font-family="JetBrains Mono,monospace" font-size="12" font-weight="700" style="fill:var(--accent)">SALE &#8212; 12 units of BAG-000001-V01</text>
+      <text x="20" y="46" font-family="Archivo,sans-serif" font-size="11" style="fill:var(--muted)">FIFO queue, oldest receipt first</text>
+
+      <text x="20" y="80" font-family="Archivo,sans-serif" font-size="12" font-weight="600" fill="currentColor">Layer #1</text>
+      <text x="20" y="96" font-family="JetBrains Mono,monospace" font-size="10.5" style="fill:var(--muted)">05 Aug &#183; &#8377;500</text>
+      <rect x="130" y="66" width="24" height="26" rx="2" style="fill:var(--accent);stroke:var(--accent)"/>
+      <rect x="158" y="66" width="24" height="26" rx="2" style="fill:var(--accent);stroke:var(--accent)"/>
+      <rect x="186" y="66" width="24" height="26" rx="2" style="fill:var(--accent);stroke:var(--accent)"/>
+      <rect x="214" y="66" width="24" height="26" rx="2" style="fill:var(--accent);stroke:var(--accent)"/>
+      <rect x="242" y="66" width="24" height="26" rx="2" style="fill:var(--accent);stroke:var(--accent)"/>
+      <rect x="270" y="66" width="24" height="26" rx="2" style="fill:var(--accent);stroke:var(--accent)"/>
+      <rect x="298" y="66" width="24" height="26" rx="2" style="fill:var(--accent);stroke:var(--accent)"/>
+      <rect x="326" y="66" width="24" height="26" rx="2" style="fill:var(--accent);stroke:var(--accent)"/>
+      <rect x="354" y="66" width="24" height="26" rx="2" style="fill:var(--accent);stroke:var(--accent)"/>
+      <rect x="382" y="66" width="24" height="26" rx="2" style="fill:var(--accent);stroke:var(--accent)"/>
+      <text x="424" y="85" font-family="JetBrains Mono,monospace" font-size="11" style="fill:var(--ink-2)">10 consumed &#8594; &#8377;5,000</text>
+      <text x="626" y="85" font-family="JetBrains Mono,monospace" font-size="11" style="fill:var(--faint)">0 remaining &#183; layer closed</text>
+
+      <text x="20" y="134" font-family="Archivo,sans-serif" font-size="12" font-weight="600" fill="currentColor">Layer #2</text>
+      <text x="20" y="150" font-family="JetBrains Mono,monospace" font-size="10.5" style="fill:var(--muted)">12 Aug &#183; &#8377;550</text>
+      <rect x="130" y="120" width="24" height="26" rx="2" style="fill:var(--accent);stroke:var(--accent)"/>
+      <rect x="158" y="120" width="24" height="26" rx="2" style="fill:var(--accent);stroke:var(--accent)"/>
+      <rect x="186" y="120" width="24" height="26" rx="2" style="fill:var(--surface);stroke:var(--rule-strong)" stroke-width="1.2"/>
+      <rect x="214" y="120" width="24" height="26" rx="2" style="fill:var(--surface);stroke:var(--rule-strong)" stroke-width="1.2"/>
+      <rect x="242" y="120" width="24" height="26" rx="2" style="fill:var(--surface);stroke:var(--rule-strong)" stroke-width="1.2"/>
+      <rect x="270" y="120" width="24" height="26" rx="2" style="fill:var(--surface);stroke:var(--rule-strong)" stroke-width="1.2"/>
+      <rect x="298" y="120" width="24" height="26" rx="2" style="fill:var(--surface);stroke:var(--rule-strong)" stroke-width="1.2"/>
+      <rect x="326" y="120" width="24" height="26" rx="2" style="fill:var(--surface);stroke:var(--rule-strong)" stroke-width="1.2"/>
+      <rect x="354" y="120" width="24" height="26" rx="2" style="fill:var(--surface);stroke:var(--rule-strong)" stroke-width="1.2"/>
+      <rect x="382" y="120" width="24" height="26" rx="2" style="fill:var(--surface);stroke:var(--rule-strong)" stroke-width="1.2"/>
+      <text x="424" y="139" font-family="JetBrains Mono,monospace" font-size="11" style="fill:var(--ink-2)">2 consumed &#8594; &#8377;1,100</text>
+      <text x="626" y="139" font-family="JetBrains Mono,monospace" font-size="11" style="fill:var(--faint)">8 remaining &#183; layer open</text>
+
+      <line x1="20" y1="180" x2="880" y2="180" style="stroke:var(--rule-strong)" stroke-width="1"/>
+      <text x="20" y="204" font-family="Archivo,sans-serif" font-size="10.5" font-weight="700" letter-spacing="1.4" style="fill:var(--faint)">ROWS WRITTEN INTO inventory_cost_consumptions</text>
+
+      <text x="20" y="230" font-family="Archivo,sans-serif" font-size="10" font-weight="700" letter-spacing="1.1" style="fill:var(--muted)">LAYER</text>
+      <text x="240" y="230" font-family="Archivo,sans-serif" font-size="10" font-weight="700" letter-spacing="1.1" text-anchor="end" style="fill:var(--muted)">QTY</text>
+      <text x="380" y="230" font-family="Archivo,sans-serif" font-size="10" font-weight="700" letter-spacing="1.1" text-anchor="end" style="fill:var(--muted)">UNIT COST</text>
+      <text x="520" y="230" font-family="Archivo,sans-serif" font-size="10" font-weight="700" letter-spacing="1.1" text-anchor="end" style="fill:var(--muted)">TOTAL</text>
+      <line x1="20" y1="238" x2="520" y2="238" style="stroke:var(--rule)" stroke-width="1"/>
+
+      <text x="20" y="260" font-family="JetBrains Mono,monospace" font-size="11.5" fill="currentColor">#1 &#183; opening stock</text>
+      <text x="240" y="260" font-family="JetBrains Mono,monospace" font-size="11.5" text-anchor="end" fill="currentColor">10</text>
+      <text x="380" y="260" font-family="JetBrains Mono,monospace" font-size="11.5" text-anchor="end" fill="currentColor">&#8377;500.0000</text>
+      <text x="520" y="260" font-family="JetBrains Mono,monospace" font-size="11.5" text-anchor="end" fill="currentColor">&#8377;5,000.00</text>
+
+      <text x="20" y="282" font-family="JetBrains Mono,monospace" font-size="11.5" fill="currentColor">#2 &#183; purchase PUR-000014</text>
+      <text x="240" y="282" font-family="JetBrains Mono,monospace" font-size="11.5" text-anchor="end" fill="currentColor">2</text>
+      <text x="380" y="282" font-family="JetBrains Mono,monospace" font-size="11.5" text-anchor="end" fill="currentColor">&#8377;550.0000</text>
+      <text x="520" y="282" font-family="JetBrains Mono,monospace" font-size="11.5" text-anchor="end" fill="currentColor">&#8377;1,100.00</text>
+
+      <line x1="20" y1="296" x2="520" y2="296" style="stroke:var(--rule-strong)" stroke-width="1"/>
+      <text x="20" y="318" font-family="Archivo,sans-serif" font-size="12.5" font-weight="700" style="fill:var(--accent)">Cost of goods sold, frozen on this order</text>
+      <text x="520" y="318" font-family="JetBrains Mono,monospace" font-size="13" font-weight="700" text-anchor="end" style="fill:var(--accent)">&#8377;6,100.00</text>
+      <text x="560" y="318" font-family="Archivo,sans-serif" font-size="11" style="fill:var(--muted)">later price changes cannot move this number</text>
+    </svg>
+    <figcaption><b>Two rows are the whole mechanism.</b> Because the sale records which layers it consumed and at what rate, the &#8377;6,100 is reproducible from stored facts forever &mdash; and a return can hand exactly those units back to exactly those layers.</figcaption>
+  </figure>
+
+  <h3>The consumption algorithm</h3>
+  <pre><b>ConsumeFifo</b>(variantId, locationId, qty, transactionId, orderItemId):
+
+  layers = <b>select</b> id, remaining_qty, unit_cost
+             <b>from</b> inventory_cost_layers
+            <b>where</b> variant_id = @v <b>and</b> location_id = @l <b>and</b> remaining_qty &gt; 0
+            <b>order by</b> received_at, id
+              <em>for update</em>          <i>&#8592; row locks held to end of transaction</i>
+
+  remaining = qty
+  <b>foreach</b> layer <b>in</b> layers:
+      take = min(layer.remaining_qty, remaining)
+      layer.remaining_qty -= take
+      <b>insert</b> inventory_cost_consumptions(layer.id, transactionId, orderItemId,
+             take, layer.unit_cost, round(take * layer.unit_cost, 2))
+      remaining -= take
+      <b>if</b> remaining == 0: <b>break</b>
+
+  <b>if</b> remaining &gt; 0:
+      <em>throw InsufficientCostLayersException</em>   <i>&#8592; invariant broken; roll everything back</i>
+
+  <b>return</b> sum(total_cost)</pre>
+  <p>The <code>for update</code> is not optional. Without it, two concurrent completions read the same open layers, each believes it can take ten units, and both write consumptions against stock that only one of them has. With it, the second transaction waits and then re-reads the truth. You are one user today, but a double-clicked <em>Complete</em> button is two concurrent requests.</p>
+
+  <h3>When a layer has no cost</h3>
+  <p>An uncosted layer is consumed like any other. The algorithm above takes its units, decrements <code>remaining_qty</code> and writes a consumption row &mdash; with <code>unit_cost</code> and <code>total_cost</code> left null. Nothing about the sale is blocked, because a missing cost is a bookkeeping gap, not a stock error.</p>
+  <p>What must not happen is the null quietly becoming a zero. <code>SUM(total_cost)</code> in SQL skips nulls, so a naive query returns a cost of goods sold that looks complete and is not &mdash; and understated cost reads as profit. Every money aggregate therefore returns a <em>coverage</em> figure beside it: units costed, units uncosted. A profit report is only ever as true as its coverage, and this design puts that number next to the answer rather than in a footnote.</p>
+  <pre>Gross profit          &#8377;42,180
+Revenue               &#8377;98,400   <i>&#183;  312 units</i>
+COGS                  &#8377;56,220   <i>&#183;  265 units costed</i>
+                                <em>47 units uncosted  &#8594;</em></pre>
+  <p>That arrow links to <b>Missing costs</b>: every layer with a null cost, newest first, with its source, quantity and one field to fill. It is what makes an optional cost recoverable rather than permanently lossy, and it is the reason the field can safely be optional at all.</p>
+
+  <h3>Reversing a return</h3>
+  <p>A return does not open a layer at today&rsquo;s cost. It walks the original consumption rows for that order line in reverse order and gives the units back where they came from:</p>
+  <pre><b>ReverseFifo</b>(orderItemId, qty):
+
+  rows = <b>select</b> * <b>from</b> inventory_cost_consumptions
+          <b>where</b> order_item_id = @oi <b>and</b> (quantity - reversed_qty) &gt; 0
+          <b>order by</b> id <b>desc</b>       <i>&#8592; last consumed, first returned</i>
+            <em>for update</em>
+
+  remaining = qty
+  <b>foreach</b> row <b>in</b> rows:
+      take = min(row.quantity - row.reversed_qty, remaining)
+      row.reversed_qty += take
+      layer(row.cost_layer_id).remaining_qty += take
+      cogsReversed += round(take * row.unit_cost, 2)
+      remaining -= take
+      <b>if</b> remaining == 0: <b>break</b>
+
+  <b>return</b> cogsReversed        <i>credited to the order, and to the period&#8217;s COGS</i></pre>
+  <p>Return two of the twelve bags above and &#8377;1,100 is credited &mdash; the &#8377;550 units, because those were consumed last. Both units land back in layer #2 with their original <code>received_at</code>, so they keep their true place in the queue rather than jumping to the front or the back.</p>
+
+  <h3>Where costs come from, per source</h3>
+  <div class="tw"><table>
+    <thead><tr><th>Event</th><th>Layer effect</th><th>Unit cost</th></tr></thead>
+    <tbody>
+      <tr><td>Opening stock import</td><td>Opens a layer</td><td>From the optional <code>UnitCost</code> column; blank leaves it uncosted</td></tr>
+      <tr><td>Purchase completed</td><td>Opens a layer per item</td><td><code>purchase_items.unit_cost</code>, optional, dated <code>purchase_date</code></td></tr>
+      <tr><td>Sale on delivery</td><td>Consumes oldest-first</td><td>Whatever the layers hold &mdash; null carries through as unknown</td></tr>
+      <tr><td>Return, sellable</td><td>Reverses consumption</td><td>The original rate, exactly</td></tr>
+      <tr><td>Return, damaged</td><td>Reverses, then consumes as Damage</td><td>Original rate in, FIFO rate out &mdash; see D5</td></tr>
+      <tr><td>Damage / Loss / Personal use</td><td>Consumes oldest-first</td><td>FIFO. Value lands in its own report bucket</td></tr>
+      <tr><td>Adjustment up</td><td>Opens a layer</td><td>Optional from the user &mdash; see D9</td></tr>
+      <tr><td>Adjustment down</td><td>Consumes oldest-first</td><td>FIFO</td></tr>
+      <tr><td>Cost backfilled later</td><td>No stock effect</td><td>Fills the layer and its null consumptions; never overwrites a known cost</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="s7">
+  <span class="sec-num">07</span>
+  <h2>Inventory reservation</h2>
+  <p class="lede">Reservation protects stock you have promised but not yet handed over. Physical stock does not move until it physically moves.</p>
+
+  <figure>
+    <svg viewBox="0 0 880 322" role="img" aria-label="Stock quantities across an order lifecycle: starting at 20 physical, 0 reserved, 20 available; after confirming 5 units, 20 physical, 5 reserved, 15 available; after delivery, 15 physical, 0 reserved, 15 available; after 2 units are returned, 17 physical, 0 reserved, 17 available.">
+      <line x1="20" y1="250" x2="860" y2="250" style="stroke:var(--rule-strong)" stroke-width="1"/>
+
+      <text x="110" y="30" font-family="Archivo,sans-serif" font-size="12.5" font-weight="700" text-anchor="middle" fill="currentColor">Opening</text>
+      <text x="110" y="48" font-family="Archivo,sans-serif" font-size="11" text-anchor="middle" style="fill:var(--muted)">20 in stock</text>
+      <rect x="65" y="110" width="90" height="140" rx="3" style="fill:var(--surface-3);stroke:var(--rule-strong)" stroke-width="1"/>
+      <text x="110" y="274" font-family="JetBrains Mono,monospace" font-size="11.5" text-anchor="middle" fill="currentColor">P 20 &#183; R 0 &#183; A 20</text>
+
+      <text x="300" y="30" font-family="Archivo,sans-serif" font-size="12.5" font-weight="700" text-anchor="middle" fill="currentColor">Confirmed</text>
+      <text x="300" y="48" font-family="Archivo,sans-serif" font-size="11" text-anchor="middle" style="fill:var(--muted)">order of 5</text>
+      <rect x="255" y="145" width="90" height="105" rx="3" style="fill:var(--surface-3);stroke:var(--rule-strong)" stroke-width="1"/>
+      <rect x="255" y="110" width="90" height="35" rx="3" style="fill:var(--accent);stroke:var(--accent)"/>
+      <text x="300" y="132" font-family="JetBrains Mono,monospace" font-size="10.5" text-anchor="middle" style="fill:var(--surface)">reserved 5</text>
+      <text x="300" y="274" font-family="JetBrains Mono,monospace" font-size="11.5" text-anchor="middle" fill="currentColor">P 20 &#183; R 5 &#183; A 15</text>
+
+      <text x="490" y="30" font-family="Archivo,sans-serif" font-size="12.5" font-weight="700" text-anchor="middle" fill="currentColor">Delivered</text>
+      <text x="490" y="48" font-family="Archivo,sans-serif" font-size="11" text-anchor="middle" style="fill:var(--muted)">FIFO consumed</text>
+      <rect x="445" y="145" width="90" height="105" rx="3" style="fill:var(--surface-3);stroke:var(--rule-strong)" stroke-width="1"/>
+      <line x1="445" y1="110" x2="535" y2="110" style="stroke:var(--rule-strong)" stroke-width="1" stroke-dasharray="3 3"/>
+      <line x1="445" y1="145" x2="535" y2="145" style="stroke:var(--rule-strong)" stroke-width="1" stroke-dasharray="3 3"/>
+      <text x="490" y="132" font-family="JetBrains Mono,monospace" font-size="10.5" text-anchor="middle" style="fill:var(--faint)">5 shipped out</text>
+      <text x="490" y="274" font-family="JetBrains Mono,monospace" font-size="11.5" text-anchor="middle" fill="currentColor">P 15 &#183; R 0 &#183; A 15</text>
+
+      <text x="680" y="30" font-family="Archivo,sans-serif" font-size="12.5" font-weight="700" text-anchor="middle" fill="currentColor">Returned</text>
+      <text x="680" y="48" font-family="Archivo,sans-serif" font-size="11" text-anchor="middle" style="fill:var(--muted)">2 sellable back</text>
+      <rect x="635" y="145" width="90" height="105" rx="3" style="fill:var(--surface-3);stroke:var(--rule-strong)" stroke-width="1"/>
+      <rect x="635" y="131" width="90" height="14" rx="2" style="fill:var(--accent-soft);stroke:var(--accent)" stroke-width="1.2"/>
+      <text x="680" y="274" font-family="JetBrains Mono,monospace" font-size="11.5" text-anchor="middle" fill="currentColor">P 17 &#183; R 0 &#183; A 17</text>
+
+      <text x="770" y="300" font-family="Archivo,sans-serif" font-size="11" style="fill:var(--faint)">bar height = physical stock</text>
+      <rect x="20" y="292" width="12" height="10" rx="2" style="fill:var(--accent)"/>
+      <text x="40" y="301" font-family="Archivo,sans-serif" font-size="11" style="fill:var(--muted)">reserved &#8212; still on the shelf, no longer sellable</text>
+      <rect x="330" y="292" width="12" height="10" rx="2" style="fill:var(--surface-3);stroke:var(--rule-strong)"/>
+      <text x="350" y="301" font-family="Archivo,sans-serif" font-size="11" style="fill:var(--muted)">available &#8212; free to sell on any channel</text>
+    </svg>
+    <figcaption><b>Confirming does not change what is on the shelf.</b> Between confirmation and delivery the bags are physically present but unsellable, which is exactly what a reservation means &mdash; and exactly what stops the same bag being promised to an Instagram buyer and a walk-in customer.</figcaption>
+  </figure>
+
+  <h3>The overselling guard</h3>
+  <p>Availability is not checked and then written. It is checked <em>in</em> the write, as one statement, so no other transaction can slip between the two:</p>
+  <pre><b>update</b> stock_levels
+   <b>set</b> reserved_qty = reserved_qty + @qty,
+       updated_at   = now()
+ <b>where</b> variant_id  = @variantId
+   <b>and</b> location_id = @locationId
+   <b>and</b> physical_qty - reserved_qty &gt;= @qty;   <i>&#8592; the guard lives inside the write</i>
+
+<i>-- 0 rows affected &#8658; not enough available stock
+--                 &#8658; roll back the transaction, return 409 with the shortfall</i></pre>
+  <p>A read-then-write pattern here would be a classic oversell: two requests both read <code>available = 5</code>, both reserve 5, and you have promised ten bags you do not own. The single-statement form makes that impossible, and the <code>ck_reserved_within_physical</code> constraint catches anything that somehow gets past it.</p>
+
+  <h3>What each event writes</h3>
+  <div class="tw"><table>
+    <thead>
+      <tr><th>Event</th><th>Transaction type</th><th class="mono">physical</th><th class="mono">reserved</th><th>FIFO</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Online order confirmed</td><td class="mono">Reservation</td><td class="num">0</td><td class="num">+q</td><td>&mdash;</td></tr>
+      <tr><td>Order cancelled while reserved</td><td class="mono">ReservationRelease</td><td class="num">0</td><td class="num">&minus;q</td><td>&mdash;</td></tr>
+      <tr><td>Order delivered</td><td class="mono">Sale</td><td class="num">&minus;q</td><td class="num">&minus;q</td><td>consume</td></tr>
+      <tr><td>Offline order completed</td><td class="mono">Sale</td><td class="num">&minus;q</td><td class="num">0</td><td>consume</td></tr>
+      <tr><td>Purchase completed</td><td class="mono">Purchase</td><td class="num">+q</td><td class="num">0</td><td>open layer</td></tr>
+      <tr><td>Opening stock imported</td><td class="mono">OpeningStock</td><td class="num">+q</td><td class="num">0</td><td>open layer</td></tr>
+      <tr><td>Return, sellable</td><td class="mono">Return</td><td class="num">+q</td><td class="num">0</td><td>reverse</td></tr>
+      <tr><td>Return, damaged</td><td class="mono">Return + Damage</td><td class="num">+q then &minus;q</td><td class="num">0</td><td>reverse, then consume</td></tr>
+      <tr><td>Damage / Loss / Personal use</td><td class="mono">Damage / Loss / PersonalUse</td><td class="num">&minus;q</td><td class="num">0</td><td>consume</td></tr>
+      <tr><td>Stock adjustment</td><td class="mono">Adjustment</td><td class="num">&plusmn;q</td><td class="num">0</td><td>open or consume</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note warn">
+    <span class="note-label">One transaction per operation</span>
+    <p>Confirming an order writes reservation rows for every line, updates every stock level, appends every ledger entry, records the status change and bumps the order &mdash; inside a single explicit <code>BEGIN</code>&hellip;<code>COMMIT</code>. If line four has insufficient stock, lines one through three are never reserved. The same applies to purchase completion, order delivery, return processing and the opening-stock import commit. There is no operation in this system that leaves inventory half-moved.</p>
+  </div>
+</section>
+
+<section id="s8">
+  <span class="sec-num">08</span>
+  <h2>Order status transitions</h2>
+  <p class="lede">Two flows, driven by a column on the channel rather than a branch in the code. Anything not drawn below is rejected with a 409 that names the attempted transition.</p>
+
+  <figure>
+    <svg viewBox="0 0 940 356" role="img" aria-label="Order state machine. Online channels: Draft to Confirmed to Packed to Shipped to Delivered, with any of Draft, Confirmed, Packed or Shipped able to move to Cancelled, and Delivered able to move to Returned. Offline channel: Draft to Completed to Returned.">
+      <defs>
+        <marker id="sm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+
+      <text x="20" y="22" font-family="Archivo,sans-serif" font-size="10.5" font-weight="700" letter-spacing="1.4" style="fill:var(--faint)">ONLINE &#8212; INSTAGRAM, WHATSAPP</text>
+
+      <rect x="20" y="40" width="96" height="40" rx="4" style="fill:var(--surface-2);stroke:var(--rule-strong)" stroke-width="1"/>
+      <text x="68" y="65" font-family="Archivo,sans-serif" font-size="12.5" font-weight="600" text-anchor="middle" fill="currentColor">Draft</text>
+      <rect x="200" y="40" width="96" height="40" rx="4" style="fill:var(--surface-2);stroke:var(--rule-strong)" stroke-width="1"/>
+      <text x="248" y="65" font-family="Archivo,sans-serif" font-size="12.5" font-weight="600" text-anchor="middle" fill="currentColor">Confirmed</text>
+      <rect x="380" y="40" width="96" height="40" rx="4" style="fill:var(--surface-2);stroke:var(--rule-strong)" stroke-width="1"/>
+      <text x="428" y="65" font-family="Archivo,sans-serif" font-size="12.5" font-weight="600" text-anchor="middle" fill="currentColor">Packed</text>
+      <rect x="560" y="40" width="96" height="40" rx="4" style="fill:var(--surface-2);stroke:var(--rule-strong)" stroke-width="1"/>
+      <text x="608" y="65" font-family="Archivo,sans-serif" font-size="12.5" font-weight="600" text-anchor="middle" fill="currentColor">Shipped</text>
+      <rect x="740" y="40" width="96" height="40" rx="4" style="fill:var(--accent-soft);stroke:var(--accent)" stroke-width="1.6"/>
+      <text x="788" y="65" font-family="Archivo,sans-serif" font-size="12.5" font-weight="700" text-anchor="middle" style="fill:var(--accent)">Delivered</text>
+
+      <line x1="116" y1="60" x2="196" y2="60" stroke="currentColor" stroke-width="1.3" marker-end="url(#sm)"/>
+      <text x="156" y="52" font-family="JetBrains Mono,monospace" font-size="10" text-anchor="middle" style="fill:var(--muted)">confirm</text>
+      <line x1="296" y1="60" x2="376" y2="60" stroke="currentColor" stroke-width="1.3" marker-end="url(#sm)"/>
+      <text x="336" y="52" font-family="JetBrains Mono,monospace" font-size="10" text-anchor="middle" style="fill:var(--muted)">pack</text>
+      <line x1="476" y1="60" x2="556" y2="60" stroke="currentColor" stroke-width="1.3" marker-end="url(#sm)"/>
+      <text x="516" y="52" font-family="JetBrains Mono,monospace" font-size="10" text-anchor="middle" style="fill:var(--muted)">ship</text>
+      <line x1="656" y1="60" x2="736" y2="60" style="stroke:var(--accent)" stroke-width="1.6" marker-end="url(#sm)"/>
+      <text x="696" y="52" font-family="JetBrains Mono,monospace" font-size="10" text-anchor="middle" style="fill:var(--accent)">deliver</text>
+
+      <line x1="68" y1="80" x2="68" y2="124" stroke="currentColor" stroke-width="1" style="stroke:var(--muted)"/>
+      <line x1="248" y1="80" x2="248" y2="124" stroke="currentColor" stroke-width="1" style="stroke:var(--muted)"/>
+      <line x1="428" y1="80" x2="428" y2="124" stroke="currentColor" stroke-width="1" style="stroke:var(--muted)"/>
+      <line x1="608" y1="80" x2="608" y2="124" stroke="currentColor" stroke-width="1" style="stroke:var(--muted)"/>
+      <line x1="68" y1="124" x2="608" y2="124" stroke="currentColor" stroke-width="1" style="stroke:var(--muted)"/>
+      <line x1="428" y1="124" x2="428" y2="148" stroke="currentColor" stroke-width="1.3" style="stroke:var(--muted)" marker-end="url(#sm)"/>
+      <text x="624" y="121" font-family="JetBrains Mono,monospace" font-size="10" style="fill:var(--muted)">cancel &#8212; reservation released</text>
+
+      <rect x="380" y="152" width="96" height="40" rx="4" style="fill:var(--surface);stroke:var(--rule-strong)" stroke-width="1.2" stroke-dasharray="4 3"/>
+      <text x="428" y="177" font-family="Archivo,sans-serif" font-size="12.5" font-weight="600" text-anchor="middle" style="fill:var(--muted)">Cancelled</text>
+
+      <line x1="788" y1="80" x2="788" y2="148" stroke="currentColor" stroke-width="1.3" style="stroke:var(--muted)" marker-end="url(#sm)"/>
+      <text x="800" y="118" font-family="JetBrains Mono,monospace" font-size="10" style="fill:var(--muted)">full return</text>
+      <rect x="740" y="152" width="96" height="40" rx="4" style="fill:var(--surface);stroke:var(--rule-strong)" stroke-width="1.2" stroke-dasharray="4 3"/>
+      <text x="788" y="177" font-family="Archivo,sans-serif" font-size="12.5" font-weight="600" text-anchor="middle" style="fill:var(--muted)">Returned</text>
+
+      <line x1="20" y1="222" x2="920" y2="222" style="stroke:var(--rule)" stroke-width="1" stroke-dasharray="5 4"/>
+      <text x="20" y="248" font-family="Archivo,sans-serif" font-size="10.5" font-weight="700" letter-spacing="1.4" style="fill:var(--faint)">OFFLINE &#8212; COUNTER SALE</text>
+
+      <rect x="20" y="264" width="96" height="40" rx="4" style="fill:var(--surface-2);stroke:var(--rule-strong)" stroke-width="1"/>
+      <text x="68" y="289" font-family="Archivo,sans-serif" font-size="12.5" font-weight="600" text-anchor="middle" fill="currentColor">Draft</text>
+      <rect x="200" y="264" width="96" height="40" rx="4" style="fill:var(--accent-soft);stroke:var(--accent)" stroke-width="1.6"/>
+      <text x="248" y="289" font-family="Archivo,sans-serif" font-size="12.5" font-weight="700" text-anchor="middle" style="fill:var(--accent)">Completed</text>
+      <rect x="380" y="264" width="96" height="40" rx="4" style="fill:var(--surface);stroke:var(--rule-strong)" stroke-width="1.2" stroke-dasharray="4 3"/>
+      <text x="428" y="289" font-family="Archivo,sans-serif" font-size="12.5" font-weight="600" text-anchor="middle" style="fill:var(--muted)">Returned</text>
+
+      <line x1="116" y1="284" x2="196" y2="284" style="stroke:var(--accent)" stroke-width="1.6" marker-end="url(#sm)"/>
+      <text x="156" y="276" font-family="JetBrains Mono,monospace" font-size="10" text-anchor="middle" style="fill:var(--accent)">complete</text>
+      <line x1="296" y1="284" x2="376" y2="284" stroke="currentColor" stroke-width="1.3" style="stroke:var(--muted)" marker-end="url(#sm)"/>
+      <text x="336" y="276" font-family="JetBrains Mono,monospace" font-size="10" text-anchor="middle" style="fill:var(--muted)">full return</text>
+      <text x="500" y="289" font-family="JetBrains Mono,monospace" font-size="10" style="fill:var(--muted)">Draft may also be cancelled, or created directly as Completed</text>
+
+      <text x="20" y="336" font-family="Archivo,sans-serif" font-size="11" style="fill:var(--faint)">Green edges are where money and stock move together &#8212; revenue recognised, FIFO layers consumed, COGS frozen.</text>
+    </svg>
+    <figcaption><b>The channel row picks the lane.</b> <code>sales_channels.uses_reservation</code> and <code>requires_shipping</code> decide which transitions are legal, so adding Meesho later means inserting a row, not editing the order service. Dashed states are terminal.</figcaption>
+  </figure>
+
+  <h3>Transition table</h3>
+  <div class="tw"><table>
+    <thead><tr><th>From &rarr; To</th><th>Guard</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">Draft &rarr; Confirmed</td><td>At least one line; available &ge; qty on every line</td><td>Reserve all lines, write ledger rows, stamp <code>confirmed_at</code></td></tr>
+      <tr><td class="mono">Confirmed &rarr; Packed</td><td>&mdash;</td><td>Status only</td></tr>
+      <tr><td class="mono">Packed &rarr; Shipped</td><td>&mdash;</td><td>Status only, stamp <code>shipped_at</code></td></tr>
+      <tr><td class="mono">Shipped &rarr; Delivered</td><td>Reservation intact for every line</td><td>Consume FIFO, write Sale rows, allocate discount, freeze <code>cogs_amount</code>, stamp <code>completed_at</code></td></tr>
+      <tr><td class="mono">Draft &rarr; Cancelled</td><td>&mdash;</td><td>Status only &mdash; nothing was ever reserved</td></tr>
+      <tr><td class="mono">Confirmed / Packed / Shipped &rarr; Cancelled</td><td>&mdash;</td><td>Release every reservation, write ReservationRelease rows</td></tr>
+      <tr><td class="mono">Draft &rarr; Completed</td><td>Offline channel only; available &ge; qty</td><td>Consume FIFO directly, no reservation row &mdash; see D10</td></tr>
+      <tr><td class="mono">Delivered / Completed &rarr; Returned</td><td>Set by the Returns module when returned qty equals sold qty</td><td>Never called directly by the API</td></tr>
+      <tr><td class="mono">Delivered / Completed &rarr; Cancelled</td><td colspan="2" style="color:var(--crit)">Rejected. Stock and cost have moved; the correct instrument is a Return &mdash; see D7</td></tr>
+      <tr><td class="mono">Anything &rarr; Draft</td><td colspan="2" style="color:var(--crit)">Rejected. Reopening a confirmed order would orphan its reservations</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Payment status, always derived</h3>
+  <pre>paidIn   = SUM(payments <b>where</b> direction = In)
+refunded = SUM(payments <b>where</b> direction = Refund)
+netPaid  = paidIn - refunded
+
+<b>if</b> refunded &gt; 0 <b>and</b> netPaid &lt;= 0        &#8594; Refunded
+<b>if</b> refunded &gt; 0                          &#8594; PartiallyRefunded   <i>&#8592; added, see D8</i>
+<b>if</b> netPaid &gt;= order.total_amount         &#8594; Paid
+<b>if</b> netPaid &gt; 0                           &#8594; PartiallyPaid
+<b>otherwise</b>                                 &#8594; Pending</pre>
+  <p>Recomputed inside the same transaction as any payment insert, update or delete. Your example &mdash; a &#8377;3,000 order paid &#8377;1,000 by UPI and &#8377;2,000 in cash &mdash; lands on <code>Paid</code> without anyone selecting it. A COD order sits on <code>Pending</code> right through <code>Delivered</code> until the courier remits, which is the honest picture.</p>
+</section>
+
+<section id="s9">
+  <span class="sec-num">09</span>
+  <h2>API surface</h2>
+  <p class="lede">REST under <code>/api/v1</code>. Collections take <code>?page&amp;pageSize&amp;search&amp;sortBy&amp;sortDir</code> and return <code>{ items, page, pageSize, totalCount }</code>. Errors are RFC 7807 <code>ProblemDetails</code> &mdash; never a raw exception.</p>
+
+  <p class="ep-group">Auth</p>
+  <div class="ep">
+    <div><span class="m w">POST</span><span class="p"><b>/api/v1/auth/login</b> &#8212; email + password, returns access and refresh token</span></div>
+    <div><span class="m w">POST</span><span class="p"><b>/api/v1/auth/refresh</b> &#8212; rotates the refresh token</span></div>
+    <div><span class="m w">POST</span><span class="p"><b>/api/v1/auth/logout</b> &#8212; revokes the refresh token</span></div>
+    <div><span class="m">GET</span><span class="p"><b>/api/v1/auth/me</b></span></div>
+  </div>
+
+  <p class="ep-group">Catalog</p>
+  <div class="ep">
+    <div><span class="m">GET</span><span class="p"><b>/products</b> &#8212; <span style="color:var(--faint)">?categoryId&amp;isActive&amp;search</span></span></div>
+    <div><span class="m w">POST</span><span class="p"><b>/products</b> &#8212; code auto-generated; variants may be created inline</span></div>
+    <div><span class="m">GET</span><span class="p"><b>/products/{id}</b> &#8212; includes variants with live stock</span></div>
+    <div><span class="m w">PUT</span><span class="p"><b>/products/{id}</b></span></div>
+    <div><span class="m w">POST</span><span class="p"><b>/products/{id}/variants</b> &#8212; SKU auto-generated as <code>-V01</code>, <code>-V02</code></span></div>
+    <div><span class="m w">PUT</span><span class="p"><b>/variants/{id}</b></span></div>
+    <div><span class="m w">DEL</span><span class="p"><b>/variants/{id}</b> &#8212; soft delete; refused if stock or history exists</span></div>
+    <div><span class="m">GET</span><span class="p"><b>/variants/lookup</b> &#8212; <span style="color:var(--faint)">?q=</span> typeahead by SKU, product or colour, for fast order entry</span></div>
+    <div><span class="m">GET</span><span class="p"><b>/categories</b> &nbsp;&#183;&nbsp; <span class="m w" style="text-align:left">POST</span> <b>/categories</b></span></div>
+  </div>
+
+  <p class="ep-group">Inventory</p>
+  <div class="ep">
+    <div><span class="m">GET</span><span class="p"><b>/inventory/stock</b> &#8212; <span style="color:var(--faint)">?lowStock&amp;outOfStock&amp;search</span> physical, reserved, available per variant</span></div>
+    <div><span class="m">GET</span><span class="p"><b>/inventory/variants/{id}/ledger</b> &#8212; full transaction history, paged</span></div>
+    <div><span class="m">GET</span><span class="p"><b>/inventory/variants/{id}/layers</b> &#8212; open FIFO layers and current stock valuation</span></div>
+    <div><span class="m w">POST</span><span class="p"><b>/inventory/adjustments</b> &#8212; Damage, Loss, PersonalUse or Adjustment; unit cost optional when increasing</span></div>
+    <div><span class="m">GET</span><span class="p"><b>/inventory/missing-costs</b> &#8212; open and consumed layers with no unit cost, newest first</span></div>
+    <div><span class="m w">PUT</span><span class="p"><b>/inventory/layers/{id}/cost</b> &#8212; backfills the layer and its null consumptions; 409 if already costed</span></div>
+    <div><span class="m">GET</span><span class="p"><b>/inventory/reconciliation</b> &#8212; lists any variant whose ledger, layers and stock level disagree</span></div>
+  </div>
+
+  <p class="ep-group">Suppliers and purchasing</p>
+  <div class="ep">
+    <div><span class="m">GET</span><span class="p"><b>/suppliers</b> &nbsp;&#183;&nbsp; POST &nbsp;&#183;&nbsp; GET <b>/{id}</b> &nbsp;&#183;&nbsp; PUT <b>/{id}</b></span></div>
+    <div><span class="m">GET</span><span class="p"><b>/purchases</b> &#8212; <span style="color:var(--faint)">?supplierId&amp;status&amp;from&amp;to</span></span></div>
+    <div><span class="m w">POST</span><span class="p"><b>/purchases</b> &#8212; created as Draft, no stock effect</span></div>
+    <div><span class="m w">PUT</span><span class="p"><b>/purchases/{id}</b> &#8212; Draft only</span></div>
+    <div><span class="m w">POST</span><span class="p"><b>/purchases/{id}/complete</b> &#8212; increases stock, opens FIFO layers, one transaction</span></div>
+    <div><span class="m w">POST</span><span class="p"><b>/purchases/{id}/cancel</b> &#8212; refused if any layer is partly consumed &mdash; see D12</span></div>
+  </div>
+
+  <p class="ep-group">Sales</p>
+  <div class="ep">
+    <div><span class="m">GET</span><span class="p"><b>/sales-channels</b> &#8212; drives the channel picker and the status rail</span></div>
+    <div><span class="m">GET</span><span class="p"><b>/customers</b> &#8212; <span style="color:var(--faint)">?search</span> matches name, phone or Instagram handle</span></div>
+    <div><span class="m w">POST</span><span class="p"><b>/customers</b> &#8212; returns the existing record on a phone or handle match, no duplicate</span></div>
+    <div><span class="m">GET</span><span class="p"><b>/orders</b> &#8212; <span style="color:var(--faint)">?status&amp;channelId&amp;customerId&amp;paymentStatus&amp;from&amp;to</span></span></div>
+    <div><span class="m w">POST</span><span class="p"><b>/orders</b> &#8212; number auto-generated; offline orders may post <code>completeImmediately</code></span></div>
+    <div><span class="m">GET</span><span class="p"><b>/orders/{id}</b> &#8212; items, payments, returns, status history</span></div>
+    <div><span class="m w">PUT</span><span class="p"><b>/orders/{id}</b> &#8212; Draft only; lines are frozen once confirmed</span></div>
+    <div><span class="m w">POST</span><span class="p"><b>/orders/{id}/confirm</b> &#8212; 409 with the exact shortfall per line if stock is short</span></div>
+    <div><span class="m w">POST</span><span class="p"><b>/orders/{id}/pack</b> &nbsp;&#183;&nbsp; <b>/ship</b> &nbsp;&#183;&nbsp; <b>/deliver</b> &nbsp;&#183;&nbsp; <b>/complete</b> &nbsp;&#183;&nbsp; <b>/cancel</b></span></div>
+  </div>
+
+  <p class="ep-group">Payments, returns, expenses</p>
+  <div class="ep">
+    <div><span class="m w">POST</span><span class="p"><b>/orders/{id}/payments</b> &#8212; recomputes payment status in the same transaction</span></div>
+    <div><span class="m w">DEL</span><span class="p"><b>/payments/{id}</b> &#8212; corrects a mis-entry, recomputes status</span></div>
+    <div><span class="m">GET</span><span class="p"><b>/returns</b> &nbsp;&#183;&nbsp; GET <b>/returns/{id}</b></span></div>
+    <div><span class="m w">POST</span><span class="p"><b>/returns</b> &#8212; order id plus lines with quantity and condition; validates against sold quantity</span></div>
+    <div><span class="m w">POST</span><span class="p"><b>/returns/{id}/complete</b> &#8212; reverses FIFO, restocks, records refund, one transaction</span></div>
+    <div><span class="m">GET</span><span class="p"><b>/expenses</b> &#8212; <span style="color:var(--faint)">?categoryId&amp;channelId&amp;from&amp;to</span> &nbsp;&#183;&nbsp; POST &nbsp;&#183;&nbsp; PUT &nbsp;&#183;&nbsp; DEL</span></div>
+    <div><span class="m">GET</span><span class="p"><b>/expense-categories</b> &nbsp;&#183;&nbsp; POST</span></div>
+  </div>
+
+  <p class="ep-group">Dashboard, reports, import</p>
+  <div class="ep">
+    <div><span class="m">GET</span><span class="p"><b>/dashboard</b> &#8212; <span style="color:var(--faint)">?from&amp;to</span> every tile in one call</span></div>
+    <div><span class="m">GET</span><span class="p"><b>/reports/sales-by-date</b> &nbsp;&#183;&nbsp; <b>/sales-by-channel</b> &nbsp;&#183;&nbsp; <b>/product-sales</b> &nbsp;&#183;&nbsp; <b>/variant-sales</b></span></div>
+    <div><span class="m">GET</span><span class="p"><b>/reports/top-products</b> &nbsp;&#183;&nbsp; <b>/low-stock</b> &nbsp;&#183;&nbsp; <b>/out-of-stock</b> &nbsp;&#183;&nbsp; <b>/purchases</b> &nbsp;&#183;&nbsp; <b>/expenses</b></span></div>
+    <div><span class="m">GET</span><span class="p"><b>/reports/gross-profit</b> &nbsp;&#183;&nbsp; <b>/net-profit</b> &#8212; all accept <span style="color:var(--faint)">?from&amp;to&amp;channelId</span>, all export CSV</span></div>
+    <div><span class="m">GET</span><span class="p"><b>/imports/opening-stock/template</b> &#8212; downloads the CSV or XLSX template</span></div>
+    <div><span class="m w">POST</span><span class="p"><b>/imports/opening-stock</b> &#8212; upload, parse and validate; writes nothing to inventory</span></div>
+    <div><span class="m">GET</span><span class="p"><b>/imports/{batchId}/preview</b> &#8212; per-row status, errors and the resolved effect</span></div>
+    <div><span class="m w">POST</span><span class="p"><b>/imports/{batchId}/commit</b> &#8212; all-or-nothing; creates products, variants, ledger rows and layers</span></div>
+  </div>
+</section>
+
+<section id="s10">
+  <span class="sec-num">10</span>
+  <h2>Frontend structure</h2>
+  <p class="lede">A dense, keyboard-friendly admin console. Tables and forms, not marketing surfaces &mdash; the screen you will spend the most time on is order entry, so that is the one designed hardest.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>Concern</th><th>Choice</th><th>Reason</th></tr></thead>
+    <tbody>
+      <tr><td>Server state</td><td>TanStack Query</td><td>Caching, invalidation and optimistic updates for free. No Redux &mdash; there is almost no true client state here</td></tr>
+      <tr><td>Routing</td><td>React Router 7</td><td>Nested layouts match the nav structure</td></tr>
+      <tr><td>Forms</td><td>React Hook Form + Zod</td><td>One schema validates the form and types the payload</td></tr>
+      <tr><td>API types</td><td><code>openapi-typescript</code> from Swagger</td><td>DTOs are generated, so a backend rename breaks the build instead of production</td></tr>
+      <tr><td>Styling</td><td>Tailwind CSS v4 + Radix primitives</td><td>Dense layouts without a component library to fight</td></tr>
+      <tr><td>Tables</td><td>TanStack Table</td><td>Server-side paging, sorting and filtering on every list</td></tr>
+      <tr><td>Charts</td><td>Recharts</td><td>Dashboard trends and the profit reports</td></tr>
+      <tr><td>HTTP</td><td>axios + refresh interceptor</td><td>A 401 transparently refreshes and retries once</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="tree"><b>frontend/src/</b>
+&#9500;&#9472; <b>app/</b>            <i>router, providers, protected route shell</i>
+&#9500;&#9472; <b>api/</b>            <i>generated types, axios client, one hooks file per module</i>
+&#9500;&#9472; <b>components/</b>     <i>DataTable, FormField, Money, StatusPill, StockBadge,</i>
+&#9474;                  <i>DateRangePicker, ConfirmDialog, EmptyState, PageHeader</i>
+&#9500;&#9472; <b>features/</b>
+&#9474;  &#9500;&#9472; dashboard/    <i>MetricTiles, SalesTrend, LowStockPanel</i>
+&#9474;  &#9500;&#9472; products/     <i>ProductList, ProductForm, VariantEditor</i>
+&#9474;  &#9500;&#9472; inventory/    <i>StockList, VariantLedger, AdjustmentDialog,
+&#9474;  &#9474;              OpeningStockImport, MissingCosts</i>
+&#9474;  &#9500;&#9472; suppliers/    purchases/   orders/   returns/
+&#9474;  &#9500;&#9472; expenses/     reports/     settings/
+&#9474;  &#9492;&#9472; auth/         <i>LoginPage</i>
+&#9500;&#9472; <b>lib/</b>            <i>inr formatter, IST dates, status maps, zod helpers</i>
+&#9492;&#9472; <b>types/</b></div>
+
+  <h3>Screens</h3>
+  <div class="tw"><table>
+    <thead><tr><th>Route</th><th>Screen</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">/</td><td>Dashboard</td><td>Tiles for sales, inventory and financials; date range in the header; low-stock panel links straight to reorder</td></tr>
+      <tr><td class="mono">/products</td><td>Product list &amp; editor</td><td>Variants edited inline as a grid &mdash; colour, size, price, threshold &mdash; because you add them in batches</td></tr>
+      <tr><td class="mono">/inventory</td><td>Stock list</td><td>Physical, reserved and available side by side, with low and out-of-stock filters</td></tr>
+      <tr><td class="mono">/inventory/:id</td><td>Variant ledger</td><td>Every movement, running balance, open FIFO layers with current valuation</td></tr>
+      <tr><td class="mono">/inventory/import</td><td>Opening stock import</td><td>Four steps: download template, upload, review errors, confirm</td></tr>
+      <tr><td class="mono">/inventory/missing-costs</td><td>Missing costs</td><td>Uncosted layers, newest first; one field per row, saved without leaving the list</td></tr>
+      <tr><td class="mono">/purchases/new</td><td>Purchase entry</td><td>SKU typeahead, quantity, unit cost, running total; save as draft or complete</td></tr>
+      <tr><td class="mono">/orders/new</td><td>Order entry</td><td><strong>The critical screen.</strong> Channel, optional customer, then type SKU &rarr; qty &rarr; Enter, repeat. Available stock shown live per line; no mouse needed</td></tr>
+      <tr><td class="mono">/orders/:id</td><td>Order detail</td><td>Status rail with only the legal next actions enabled, payment panel with derived status, returns panel</td></tr>
+      <tr><td class="mono">/returns/new</td><td>Return entry</td><td>Pick a delivered order, tick lines, set quantity and condition, refund amount pre-filled</td></tr>
+      <tr><td class="mono">/expenses</td><td>Expenses</td><td>Fast inline add row, category and optional channel</td></tr>
+      <tr><td class="mono">/reports</td><td>Reports</td><td>Eleven reports behind a shared date-range and channel filter, CSV export on each</td></tr>
+      <tr><td class="mono">/settings</td><td>Settings</td><td>Business details, categories, expense categories, sales channels, low-stock default, password</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note">
+    <span class="note-label">Two interaction rules that matter more than any styling</span>
+    <p>Available stock is displayed at the moment of decision &mdash; on the order line as you type it, not on a separate screen. And a confirm that fails on stock returns which lines were short and by how much, rendered against those lines rather than as a toast that vanishes.</p>
+  </div>
+</section>
+
+<section id="s11">
+  <span class="sec-num">11</span>
+  <h2>Delivery plan &mdash; two releases</h2>
+  <p class="lede">Revised 24 August. Inventory management ships and goes live on its own; sales and the financial dashboard follow as a second release against the same database.</p>
+
+  <div class="note">
+    <span class="note-label">What the re-sequencing changes</span>
+    <p><strong>Nothing in the schema, the architecture or the FIFO design.</strong> All 27 tables are created in Release 1&rsquo;s first migration, including the order, payment and return tables that sit empty until Release 2. Splitting delivery does not split the database &mdash; a half-built schema would force a painful migration the moment orders arrive.</p>
+    <p>What does change is order of work, and two things move <em>earlier</em>: the opening-stock import and the production deployment. Both were near the end of the original plan; both are now inside Release 1, because a stock system you cannot load your existing stock into and cannot reach from your phone is not usable.</p>
+  </div>
+
+  <h3>Release 1 &mdash; Inventory management</h3>
+  <p>The goal is a system you actually run the stock side of your business on, deployed and holding real data, before any order code exists. Reserved stock stays at zero throughout and the reservation columns sit unused &mdash; by design, not by omission.</p>
+
+  <div class="ms">
+    <div class="ms-row">
+      <div class="ms-tag">R1 &#183; M1</div>
+      <div>
+        <h4>Foundation</h4>
+        <p>Solution and four projects, <code>git init</code>, EF Core with the full 27-table migration applied to Supabase, environment-variable configuration, JWT auth with one seeded user, Swagger, Serilog, ProblemDetails handler, CORS. React shell with routing, axios client and login. The backup script and the test-schema guard land here, before there is anything to lose.</p>
+        <div class="gate"><b>Gate</b>Migrations apply cleanly to an empty Supabase project, login returns a token, <code>/health</code> is green, the shell renders behind auth, and the integration suite refuses to start against the <code>public</code> schema</div>
+      </div>
+    </div>
+    <div class="ms-row">
+      <div class="ms-tag">R1 &#183; M2</div>
+      <div>
+        <h4>Catalog and the stock ledger</h4>
+        <p>Products, variants, categories, automatic product code and variant SKU generation. Stock levels with their check constraints, the append-only transaction ledger, and manual movements &mdash; damage, loss, personal use and adjustments. The reconciliation endpoint.</p>
+        <p><strong>The FIFO consumption engine is built here</strong>, because a damage or downward adjustment consumes layers exactly as a sale will. Release 2 inherits an engine that has already been exercised against real data for weeks.</p>
+        <div class="gate"><b>Gate</b>Negative stock rejected by the database; ledger sums equal stock levels after a randomised movement sequence; FIFO consumption returns exact costs across multiple layers; SKU generation survives concurrent creates</div>
+      </div>
+    </div>
+    <div class="ms-row">
+      <div class="ms-tag">R1 &#183; M3</div>
+      <div>
+        <h4>Suppliers, purchases and FIFO layers</h4>
+        <p>Supplier records, purchase draft and completion, cost-layer creation on receipt, the cancellation guard, and stock valuation at cost. Purchase entry screen with SKU typeahead and a running total.</p>
+        <div class="gate"><b>Gate</b>Completing a purchase raises stock and opens a layer at the right cost and date; <code>SUM(remaining_qty) = physical_qty</code> holds; cancelling a partly-consumed purchase is refused with a clear reason</div>
+      </div>
+    </div>
+    <div class="ms-row">
+      <div class="ms-tag">R1 &#183; M4</div>
+      <div>
+        <h4>Opening stock import <span class="chip flag">moved up</span></h4>
+        <p>Template download, CSV and Excel parsing, per-row validation, error surfacing, preview, and an all-or-nothing commit creating products, variants, ledger rows and cost layers. <code>UnitCost</code> is optional, so a row without one imports cleanly and opens an uncosted layer &mdash; you can load every bag you own on day one and price the history later. This is what turns the empty system into <em>your</em> system.</p>
+        <div class="gate"><b>Gate</b>A file with one bad row on line 40 commits nothing at all; a valid file produces correct stock, layers and valuation; re-uploading the same batch cannot double-commit</div>
+      </div>
+    </div>
+    <div class="ms-row">
+      <div class="ms-tag">R1 &#183; M5</div>
+      <div>
+        <h4>Inventory dashboard and reports</h4>
+        <p>The inventory half of the dashboard &mdash; total products, total variants, units in stock, stock value at cost, low stock and out of stock. Reports for low stock, out of stock, purchases, stock movement and stock valuation, all with date filters and CSV export. Every valuation carries its coverage figure, and the <b>Missing costs</b> screen with layer backfill ships here.</p>
+        <p>The sales and financial tiles are not stubbed or faked; they simply are not on the page yet, and arrive in Release 2.</p>
+        <div class="gate"><b>Gate</b>Stock valuation equals the sum of open layers computed independently; uncosted units are reported as a count and never valued at zero; backfilling a cost updates both the valuation and the already-consumed rows, and a second backfill of the same layer changes nothing; low-stock thresholds fire per variant</div>
+      </div>
+    </div>
+    <div class="ms-row">
+      <div class="ms-tag">R1 &#183; M6</div>
+      <div>
+        <h4>Deploy and go live <span class="chip flag">moved up</span></h4>
+        <p>API Dockerfile built by Render, migrations applied on deploy, service configuration, frontend build and hosting, production CORS, and secrets as environment variables. Connections split deliberately: the <b>direct connection on 5432</b> for migrations, which need prepared statements and advisory locks, and the <b>transaction pooler on 6543</b> for the running app.</p>
+        <div class="gate"><b>Gate</b>A clean deploy from an empty database migrates and seeds; you import real opening stock into production and record a real purchase against it</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Release 2 &mdash; Sales and dashboard</h3>
+  <p>Built against a database already carrying live stock, so every order written in this release consumes layers created by your actual purchases rather than by seed data.</p>
+
+  <div class="ms">
+    <div class="ms-row">
+      <div class="ms-tag">R2 &#183; M7</div>
+      <div>
+        <h4>Orders, reservation and consumption</h4>
+        <p>Sales channels, customers with duplicate matching, orders and items with frozen price snapshots, the full state machine for both lanes, reservation and release, FIFO consumption on delivery, and pro-rata discount allocation. Order entry and order detail screens.</p>
+        <div class="gate"><b>Gate</b>The &#8377;500 / &#8377;550 example reproduces &#8377;6,100 exactly; confirming beyond available stock is refused with the per-line shortfall; cancelling releases every reservation; two concurrent confirms of the last unit &mdash; one succeeds, one gets a clean 409</div>
+      </div>
+    </div>
+    <div class="ms-row">
+      <div class="ms-tag">R2 &#183; M8</div>
+      <div>
+        <h4>Payments and returns</h4>
+        <p>Multiple payments per order with derived status across all five states, refunds as signed rows, then full and partial returns with FIFO reversal, sellable and damaged handling, and refund recording.</p>
+        <div class="gate"><b>Gate</b>A partial return credits COGS at the original rate and restores the exact layers it came from; returning more than was sold is refused; payment status is never writable; both inventory invariants hold after every scenario</div>
+      </div>
+    </div>
+    <div class="ms-row">
+      <div class="ms-tag">R2 &#183; M9</div>
+      <div>
+        <h4>Expenses, full dashboard and profit reports</h4>
+        <p>Expense module with extensible categories, then the sales and financial dashboard tiles, and the remaining reports &mdash; sales by date, by channel, product-wise, variant-wise, top sellers, gross profit and net profit, with Recharts trends and CSV export.</p>
+        <div class="gate"><b>Gate</b>Gross profit equals revenue minus FIFO COGS on a dataset computed by hand; net profit subtracts expenses in the same window; every report reconciles with the dashboard and with Release 1&rsquo;s inventory numbers</div>
+      </div>
+    </div>
+    <div class="ms-row">
+      <div class="ms-tag">R2 &#183; M10</div>
+      <div>
+        <h4>Redeploy</h4>
+        <p>Ship the sales half to the live environment without downtime for the inventory half, since no schema migration is required &mdash; only new code paths against tables that already exist.</p>
+        <div class="gate"><b>Gate</b>The deployed system completes a full order lifecycle against stock that was imported in Release 1</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Test coverage at the gates</h3>
+  <p>Unit tests run against the Domain layer with no database, and carry most of the load. Integration tests run against a real Postgres &mdash; the <code>test</code> schema of the same Supabase project &mdash; because half the guarantees in this design are database constraints and an in-memory provider would not enforce a single one of them.</p>
+  <p>That schema is created and dropped on every run, so the fixture is guarded: it reads the connection string and refuses to start unless the search path is <code>test</code>. <code>DROP SCHEMA test CASCADE</code> cannot reach <code>public</code>, which is what makes it safe to run destructive tests against the same database that holds real stock. Because every statement is a network round trip, integration tests are kept few and load-bearing &mdash; FIFO consumption, the oversell race, import rollback, the invariants &mdash; and everything else is a unit test.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Behaviour</th><th>Kind</th><th>Milestone</th></tr></thead>
+    <tbody>
+      <tr><td>FIFO consumption across multiple layers</td><td>Unit + integration</td><td class="mono">R1 &#183; M2</td></tr>
+      <tr><td>Negative stock prevention</td><td>Integration</td><td class="mono">R1 &#183; M2</td></tr>
+      <tr><td>Ledger, layer and stock-level invariants</td><td>Integration, after every scenario</td><td class="mono">R1 &#183; M2 onward</td></tr>
+      <tr><td>Purchase stock increase and layer creation</td><td>Integration</td><td class="mono">R1 &#183; M3</td></tr>
+      <tr><td>Import rollback on any invalid row</td><td>Integration</td><td class="mono">R1 &#183; M4</td></tr>
+      <tr><td>Stock valuation against open layers</td><td>Integration</td><td class="mono">R1 &#183; M5</td></tr>
+      <tr><td>Consumption of an uncosted layer, and coverage reporting</td><td>Integration</td><td class="mono">R1 &#183; M5</td></tr>
+      <tr><td>Cost backfill repairs history and is idempotent</td><td>Unit + integration</td><td class="mono">R1 &#183; M5</td></tr>
+      <tr><td>Reservation, release and the oversell guard</td><td>Integration</td><td class="mono">R2 &#183; M7</td></tr>
+      <tr><td>Concurrent confirmation of the last unit</td><td>Integration</td><td class="mono">R2 &#183; M7</td></tr>
+      <tr><td>Illegal status transitions</td><td>Unit</td><td class="mono">R2 &#183; M7</td></tr>
+      <tr><td>Order discount allocation and rounding</td><td>Unit</td><td class="mono">R2 &#183; M7</td></tr>
+      <tr><td>Payment status derivation, all five states</td><td>Unit</td><td class="mono">R2 &#183; M8</td></tr>
+      <tr><td>FIFO reversal on partial return</td><td>Unit + integration</td><td class="mono">R2 &#183; M8</td></tr>
+      <tr><td>Gross and net profit on a hand-computed dataset</td><td>Integration</td><td class="mono">R2 &#183; M9</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note">
+    <span class="note-label">Nothing is blocked</span>
+    <p>Both questions that gated this design are answered. <strong>GST is out of scope</strong> for both releases, which removes fields rather than adding them. <strong>Cost price is per SKU per entry and optional</strong>, which keeps the FIFO queue intact while letting you load stock faster than you can price it &mdash; at the cost of profit reports that read <em>coverage 60%</em> until you work through the Missing costs screen. That is absent data rather than wrong data, and the system says so on every figure it touches.</p>
+    <p>The twelve decisions in section 02 stand unless you overturn them, with D9 amended to match the optional cost. <strong>R1 &#183; M1 can begin.</strong></p>
+  </div>
+</section>
+
+</main>
+</div>
+
+<footer>
+  <div class="footer-inner">
+    <span>SlingKing &#183; Phase 1 design brief &#183; revised 24 August 2026</span>
+    <span>Modular monolith &#183; .NET 8 LTS &#183; PostgreSQL &#183; React 19</span>
+  </div>
+</footer>

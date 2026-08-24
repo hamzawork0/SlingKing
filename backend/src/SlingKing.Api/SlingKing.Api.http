@@ -1,0 +1,6 @@
+@SlingKing.Api_HostAddress = http://localhost:5197
+
+GET {{SlingKing.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
