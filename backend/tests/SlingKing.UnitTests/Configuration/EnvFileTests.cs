@@ -68,12 +68,33 @@ public class EnvFileTests : IDisposable
         EnvFile.Load(Path.Combine(Path.GetTempPath(), "definitely-not-here")).ShouldBe(0);
     }
 
+    [Fact]
+    public void Precedence_is_decided_by_presence_not_by_truthiness()
+    {
+        // Present (any value, even one that string.IsNullOrEmpty would treat as falsy if it
+        // were empty) must block the file. This pins Contains()-style presence semantics
+        // directly, without relying on Windows' behaviour of collapsing "" to unset, which
+        // makes the true present-but-empty state impossible to manufacture via
+        // Environment.SetEnvironmentVariable on this platform.
+        Environment.SetEnvironmentVariable("SK_TEST_PRESENCE", "x");
+        WriteFile("SK_TEST_PRESENCE=from-file\n");
+
+        EnvFile.Load(_path).ShouldBe(0);
+        Environment.GetEnvironmentVariable("SK_TEST_PRESENCE").ShouldBe("x");
+
+        // Unset (key absent entirely) must let the file value through.
+        Environment.SetEnvironmentVariable("SK_TEST_PRESENCE", null);
+
+        EnvFile.Load(_path).ShouldBe(1);
+        Environment.GetEnvironmentVariable("SK_TEST_PRESENCE").ShouldBe("from-file");
+    }
+
     public void Dispose()
     {
         foreach (var key in new[]
                  {
                      "SK_TEST_ONE", "SK_TEST_TWO", "SK_TEST_THREE",
-                     "SK_TEST_CONN", "SK_TEST_QUOTED", "SK_TEST_EXISTING"
+                     "SK_TEST_CONN", "SK_TEST_QUOTED", "SK_TEST_EXISTING", "SK_TEST_PRESENCE"
                  })
         {
             Environment.SetEnvironmentVariable(key, null);

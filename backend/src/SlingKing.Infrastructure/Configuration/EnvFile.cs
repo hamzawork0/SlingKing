@@ -1,8 +1,15 @@
+using System.Collections;
+
 namespace SlingKing.Infrastructure.Configuration;
 
 /// <summary>
-/// Minimal <c>.env</c> reader. Real environment variables always win, so a value
-/// exported by the host (Render, CI) is never clobbered by a stray local file.
+/// Minimal <c>.env</c> reader. A variable already present in the process environment always
+/// wins — including one exported but set to an empty string — so a value deliberately set by
+/// the host (Render, CI) is never overridden by a stray local file. Note: on Windows,
+/// <see cref="Environment.SetEnvironmentVariable(string, string?)"/> treats an empty-string
+/// value as "unset" rather than "present but empty", so that particular state cannot be
+/// reproduced through that API on this platform; the presence check below is still correct on
+/// the Linux hosts this runs on in production.
 /// </summary>
 public static class EnvFile
 {
@@ -29,7 +36,7 @@ public static class EnvFile
                 value = value[1..^1];
             }
 
-            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable(key))) continue;
+            if (Environment.GetEnvironmentVariables().Contains(key)) continue;
 
             Environment.SetEnvironmentVariable(key, value);
             applied++;
