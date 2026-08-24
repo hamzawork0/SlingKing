@@ -22,3 +22,6 @@ Thumbs.db
 
 # Controller scratch space — not part of the repo history
 .superpowers/
+
+# Local tooling
+.claude/settings.local.json
