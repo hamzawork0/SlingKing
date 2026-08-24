@@ -35,9 +35,9 @@ One name, one purpose. `backend/.env.example` documents them; `backend/.env` hol
 
 | Variable | Purpose |
 |---|---|
-| `SLINGKING_DB_MIGRATION` | Supabase **direct** connection, port 5432. Migrations only. |
+| `SLINGKING_DB_MIGRATION` | Supabase **session pooler**, port 5432. Migrations only. |
 | `SLINGKING_DB_RUNTIME` | Supabase **transaction pooler**, port 6543. The running API. |
-| `SLINGKING_DB_TEST` | Direct connection with `Search Path=test`. Integration tests only. |
+| `SLINGKING_DB_TEST` | Session pooler with `Search Path=test`. Integration tests only. |
 | `SLINGKING_JWT_SECRET` | Signing key, 32+ bytes. |
 | `SLINGKING_JWT_ISSUER` | Token issuer, e.g. `slingking-api`. |
 | `SLINGKING_JWT_AUDIENCE` | Token audience, e.g. `slingking-web`. |
@@ -488,18 +488,27 @@ Create `backend/.env.example` — names and shapes only, never real values:
 
 ```dotenv
 # Copy to backend/.env and fill in. backend/.env is gitignored — keep it that way.
-# Supabase → Project Settings → Database → Connection string
+# Supabase -> Project Settings -> Database -> Connection string
 
-# Direct connection, port 5432. Migrations need prepared statements and advisory
-# locks, which the transaction pooler does not support.
-SLINGKING_DB_MIGRATION=Host=db.<ref>.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=<password>;SSL Mode=Require;Trust Server Certificate=true
+# IMPORTANT: do NOT use the "Direct connection" string (db.<ref>.supabase.co).
+# Supabase resolves that host to an AAAA record only — it is IPv6-only, and most
+# home ISPs (and this dev machine) have no IPv6 route, so it fails to connect at
+# all. Every string below therefore uses the regional pooler, which is IPv4.
+#
+# Copy the pooler host from the dashboard; it is regional and the prefix differs
+# per project (aws-0-... / aws-1-...). Username is postgres.<ref>, not postgres.
 
-# Transaction pooler, port 6543. Used by the running API.
-SLINGKING_DB_RUNTIME=Host=aws-0-ap-south-1.pooler.supabase.com;Port=6543;Database=postgres;Username=postgres.<ref>;Password=<password>;SSL Mode=Require;Trust Server Certificate=true;No Reset On Close=true;Max Auto Prepare=0
+# Session pooler, port 5432. Migrations need prepared statements and advisory
+# locks. Session mode supports both; the transaction pooler on 6543 does not.
+SLINGKING_DB_MIGRATION=Host=<pooler-host>;Port=5432;Database=postgres;Username=postgres.<ref>;Password=<password>;SSL Mode=Require;Trust Server Certificate=true
 
-# Direct connection pinned to the throwaway test schema. Integration tests refuse
-# to start unless this says Search Path=test.
-SLINGKING_DB_TEST=Host=db.<ref>.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=<password>;SSL Mode=Require;Trust Server Certificate=true;Search Path=test
+# Transaction pooler, port 6543. Used by the running API — it holds a connection
+# only for the length of a statement, which is what a small app on a free tier wants.
+SLINGKING_DB_RUNTIME=Host=<pooler-host>;Port=6543;Database=postgres;Username=postgres.<ref>;Password=<password>;SSL Mode=Require;Trust Server Certificate=true;No Reset On Close=true;Max Auto Prepare=0
+
+# Session pooler pinned to the throwaway test schema. Integration tests migrate,
+# so they need session mode too. They refuse to start unless this says Search Path=test.
+SLINGKING_DB_TEST=Host=<pooler-host>;Port=5432;Database=postgres;Username=postgres.<ref>;Password=<password>;SSL Mode=Require;Trust Server Certificate=true;Search Path=test
 
 # 32+ bytes. Generate with: openssl rand -base64 48
 SLINGKING_JWT_SECRET=
@@ -2432,9 +2441,9 @@ using SlingKing.Infrastructure.Configuration;
 namespace SlingKing.Infrastructure.Persistence;
 
 /// <summary>
-/// Used only by the dotnet-ef tooling. Always resolves the DIRECT connection —
-/// migrations need prepared statements and advisory locks, which the transaction
-/// pooler does not support.
+/// Used only by the dotnet-ef tooling. Always resolves the migration connection —
+/// migrations need prepared statements and advisory locks, which the SESSION pooler
+/// on 5432 supports and the transaction pooler on 6543 does not.
 /// </summary>
 public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
@@ -2747,7 +2756,11 @@ Configuration written on a whiteboard is a hope. This task applies the migration
 
 - [ ] **Step 1: Fill in the real connection strings**
 
-Open `backend/.env` (created in Task 2) and paste the three connection strings from Supabase → *Project Settings → Database*. `SLINGKING_DB_TEST` must be the direct connection with `;Search Path=test` appended.
+Open `backend/.env` and fill in the two values still marked `<pooler-host>` and `<password>`.
+
+Take them from Supabase → *Project Settings → Database → Connection string → **Session pooler***. Do **not** use the *Direct connection* string: Supabase publishes `db.<ref>.supabase.co` with an AAAA record only, so it is unreachable from any network without IPv6 — including this one. The host is regional and its prefix differs per project (`aws-0-…` / `aws-1-…`), which is why it cannot be derived.
+
+All three strings share the same host and password; only the port and the trailing options differ. `SLINGKING_DB_TEST` must keep `;Search Path=test`.
 
 Sanity-check that git still cannot see the file:
 
@@ -5624,7 +5637,7 @@ create schema gate_check;
 ```
 
 ```bash
-SLINGKING_DB_MIGRATION="<direct connection>;Search Path=gate_check" \
+SLINGKING_DB_MIGRATION="<session pooler connection>;Search Path=gate_check" \
   dotnet ef database update \
   --project src/SlingKing.Infrastructure --startup-project src/SlingKing.Infrastructure
 ```
@@ -5663,7 +5676,7 @@ Already confirmed in Task 16 Step 6. Re-confirm point 1 only: signed out, `http:
 The single most important check in this milestone. Temporarily point the test connection at the wrong schema and confirm the suite refuses:
 
 ```bash
-SLINGKING_DB_TEST="<direct connection>;Search Path=public" dotnet test tests/SlingKing.IntegrationTests
+SLINGKING_DB_TEST="<session pooler connection>;Search Path=public" dotnet test tests/SlingKing.IntegrationTests
 ```
 Expected: **every test fails** with `Integration tests refuse to run outside the 'test' schema`. If even one test runs, stop and fix the guard before going any further — this is the property that lets a single database be safe.
 

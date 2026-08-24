@@ -5,9 +5,9 @@ using SlingKing.Infrastructure.Configuration;
 namespace SlingKing.Infrastructure.Persistence;
 
 /// <summary>
-/// Used only by the dotnet-ef tooling. Always resolves the DIRECT connection —
-/// migrations need prepared statements and advisory locks, which the transaction
-/// pooler does not support.
+/// Used only by the dotnet-ef tooling. Always resolves the migration connection —
+/// migrations need prepared statements and advisory locks, which the SESSION pooler
+/// on 5432 supports and the transaction pooler on 6543 does not.
 /// </summary>
 public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
