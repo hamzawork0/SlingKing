@@ -20,14 +20,17 @@ public class MigrationTests
     }
 
     [Fact]
-    public void There_is_exactly_one_migration_and_it_is_the_initial_schema()
+    public void The_migrations_are_exactly_the_two_we_expect_in_order()
     {
         using var db = BuildContext();
 
         var migrations = db.Database.GetMigrations().ToArray();
 
-        migrations.Length.ShouldBe(1);
+        // Named and ordered deliberately. A stray migration, a rename, or a
+        // reordering all fail here rather than surfacing on a production deploy.
+        migrations.Length.ShouldBe(2);
         migrations[0].ShouldEndWith("InitialSchema");
+        migrations[1].ShouldEndWith("EnableRowLevelSecurity");
     }
 
     [Fact]
