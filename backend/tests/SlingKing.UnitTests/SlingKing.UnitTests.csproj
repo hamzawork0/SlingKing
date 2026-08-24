@@ -21,6 +21,7 @@
     <ProjectReference Include="..\..\src\SlingKing.Domain\SlingKing.Domain.csproj" />
     <ProjectReference Include="..\..\src\SlingKing.Application\SlingKing.Application.csproj" />
     <ProjectReference Include="..\..\src\SlingKing.Infrastructure\SlingKing.Infrastructure.csproj" />
+    <ProjectReference Include="..\SlingKing.IntegrationTests\SlingKing.IntegrationTests.csproj" />
   </ItemGroup>
 
 </Project>
