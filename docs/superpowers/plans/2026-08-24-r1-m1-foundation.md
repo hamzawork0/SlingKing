@@ -5628,34 +5628,30 @@ Expected: build clean with warnings-as-errors on; **all** unit and integration t
 
 - [ ] **Step 2: Migrations apply to an empty database**
 
-Confirm the migration is reproducible from nothing, using the test schema as the stand-in for an empty project:
+Already proven on every test run. There is no separate command here.
 
-```bash
-dotnet ef database drop --force \
-  --project src/SlingKing.Infrastructure --startup-project src/SlingKing.Infrastructure --dry-run
+`TestSchemaFixture.InitializeAsync` runs `drop schema if exists test cascade; create schema test;`
+and then migrates into that empty schema, and `SchemaConstraintTests.Every_expected_table_exists`
+asserts the result holds 28 base tables (27 domain tables plus `__ef_migrations_history`). A green
+integration run therefore IS the from-nothing reproducibility proof. Confirm the `test` schema does
+not exist between runs -- the fixture drops it on dispose -- so the assertion cannot be reading a
+schema that survived from an earlier run.
+
+Do NOT try to prove this by pointing `SLINGKING_DB_MIGRATION` at a scratch schema with
+`;Search Path=gate_check`. It cannot work, and the failure is actively misleading:
+
+```
+42P01: relation "__ef_migrations_history" does not exist
+   at Microsoft.EntityFrameworkCore.Migrations.HistoryRepository.GetAppliedMigrations()
 ```
 
-Then in the Supabase SQL editor:
-
-```sql
-drop schema if exists gate_check cascade;
-create schema gate_check;
-```
-
-```bash
-SLINGKING_DB_MIGRATION="<session pooler connection>;Search Path=gate_check" \
-  dotnet ef database update \
-  --project src/SlingKing.Infrastructure --startup-project src/SlingKing.Infrastructure
-```
-
-Then verify and clean up in the SQL editor:
-
-```sql
-select count(*) from information_schema.tables where table_schema = 'gate_check';
--- expect 28
-
-drop schema gate_check cascade;
-```
+`AddInfrastructure` and the design-time factory both call `MigrationsHistoryTable(...)` with no
+schema argument. So `HistoryRepository.Exists()` looks for the table in the model's default schema
+-- `public`, where it does exist -- while the following `SELECT` is unqualified and resolves through
+`search_path` to the scratch schema, where it does not. The two disagree and the migration dies
+before applying a single statement. The fixture sidesteps this by naming the schema explicitly:
+`npgsql.MigrationsHistoryTable("__ef_migrations_history", SchemaName)`. A connection string alone
+cannot express that, which is why this step is an assertion about the suite, not a command to run.
 
 - [ ] **Step 3: Health is green**
 
