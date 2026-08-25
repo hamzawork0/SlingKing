@@ -4633,7 +4633,11 @@ Expected: a green `Backup complete` line. Then confirm the file actually contain
 ```bash
 grep -c "CREATE TABLE" backups/slingking-*.sql
 ```
-Expected: `27`.
+Expected: `28` — the 27 domain tables plus EF's own `__ef_migrations_history`. Verified against a
+real dump of the live database, which produced exactly 28 `CREATE TABLE` lines and 28 `COPY` blocks.
+
+The dump contains every row, including `users.password_hash`. `backups/` must be gitignored BEFORE
+the script is run for the first time, not after.
 
 - [ ] **Step 5: Confirm backups cannot be committed**
 
@@ -5690,7 +5694,11 @@ Restore the correct value afterwards and re-run `dotnet test` to confirm green.
 .\backup.ps1
 grep -c "CREATE TABLE" backups/slingking-*.sql
 ```
-Expected: `27`.
+Expected: `28` — the 27 domain tables plus EF's own `__ef_migrations_history`. Verified against a
+real dump of the live database, which produced exactly 28 `CREATE TABLE` lines and 28 `COPY` blocks.
+
+The dump contains every row, including `users.password_hash`. `backups/` must be gitignored BEFORE
+the script is run for the first time, not after.
 
 - [ ] **Step 8: Tag the milestone**
 
