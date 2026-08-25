@@ -28,3 +28,6 @@ Thumbs.db
 
 # Serilog rolling file sink output.
 logs/
+
+# Playwright MCP scratch output
+.playwright-mcp/
