@@ -38,8 +38,18 @@ export const tokenStore = {
   },
 };
 
+// No fallback. A default here would let a missing VITE_API_BASE_URL ship a build that
+// silently talks to a dead port — every request failing in a way that looks like the
+// API being down rather than the app being misconfigured. Fail at load instead.
+const baseURL: string = import.meta.env.VITE_API_BASE_URL;
+if (!baseURL) {
+  throw new Error(
+    "VITE_API_BASE_URL is not set. Copy frontend/.env.example to frontend/.env.",
+  );
+}
+
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5210",
+  baseURL,
   headers: { "Content-Type": "application/json" },
 });
 

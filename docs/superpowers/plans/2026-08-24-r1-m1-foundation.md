@@ -4718,7 +4718,7 @@ happened and do not apologise. An empty screen says what is true and what comes 
 
 **Interfaces:**
 - Consumes: the `LoginResponse` shape from Task 13.
-- Produces: `api` (configured axios instance), `tokenStore` with `get()/set()/clear()`, `login()`, `logout()`, `getMe()`; `formatInr(paise: number | null)`, `formatIstDate(iso: string)`.
+- Produces: `api` (configured axios instance), `tokenStore` with `get()/set()/clear()`, `login()`, `logout()`, `getMe()`; `formatInr(rupees: number | null)`, `formatIstDate(iso: string)`.
 
 - [ ] **Step 1: Scaffold and pin**
 
@@ -4832,7 +4832,7 @@ Create `frontend/.env.example`:
 ```dotenv
 # Vite only exposes variables prefixed VITE_ to the browser. Never put a secret here —
 # anything in this file ships to every visitor in the JavaScript bundle.
-VITE_API_BASE_URL=http://localhost:5210
+VITE_API_BASE_URL=http://localhost:5197
 ```
 
 Copy it to `frontend/.env` and set the port the API actually printed in Task 13 Step 10.
@@ -5004,7 +5004,10 @@ export const tokenStore = {
 };
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5210",
+  // No fallback. A default here lets a missing VITE_API_BASE_URL ship a build that
+  // silently talks to a dead port, so every request fails looking like a downed API
+  // rather than a misconfigured app. Read it into a const above and throw if unset.
+  baseURL,
   headers: { "Content-Type": "application/json" },
 });
 
@@ -5579,7 +5582,7 @@ rm frontend/src/App.tsx frontend/src/App.css
 
 - [ ] **Step 5: Type-check and build**
 
-Run: `cd frontend && npx tsc --noEmit && npm run build`
+Run: `cd frontend && npx tsc -b --force && npm run build`
 Expected: no errors, `dist/` produced.
 
 - [ ] **Step 6: Verify the flow by hand**
@@ -5657,14 +5660,14 @@ drop schema gate_check cascade;
 - [ ] **Step 3: Health is green**
 
 ```bash
-curl -s http://localhost:5210/api/v1/health
+curl -s http://localhost:5197/api/v1/health
 ```
 Expected: `{"status":"ok","database":"ok"}`
 
 - [ ] **Step 4: Login returns a token**
 
 ```bash
-curl -s -X POST http://localhost:5210/api/v1/auth/login \
+curl -s -X POST http://localhost:5197/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"<seeded email>","password":"<seeded password>"}'
 ```
