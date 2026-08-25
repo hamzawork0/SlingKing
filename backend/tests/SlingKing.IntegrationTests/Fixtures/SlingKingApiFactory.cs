@@ -46,7 +46,12 @@ public class SlingKingApiFactory : WebApplicationFactory<Program>
             MaxPoolSize = MaxPoolSize
         }.ConnectionString;
 
+        // Program.cs migrates over SLINGKING_DB_MIGRATION and serves over SLINGKING_DB_RUNTIME.
+        // BOTH are pinned to the guarded test-schema connection above. Overriding only the
+        // runtime one would leave the host migrating the real public schema from inside a
+        // test run — the exact thing TestSchemaFixture exists to make impossible.
         Environment.SetEnvironmentVariable("SLINGKING_DB_RUNTIME", runtime);
+        Environment.SetEnvironmentVariable("SLINGKING_DB_MIGRATION", runtime);
         Environment.SetEnvironmentVariable("SLINGKING_SEED_ADMIN_EMAIL", SeedEmail);
         Environment.SetEnvironmentVariable("SLINGKING_SEED_ADMIN_PASSWORD", SeedPassword);
 

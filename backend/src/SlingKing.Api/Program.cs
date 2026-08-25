@@ -132,11 +132,27 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
+// Migrations run over SLINGKING_DB_MIGRATION, never the runtime connection. Applying DDL
+// needs session-level advisory locks and prepared statements; the transaction pooler on 6543
+// multiplexes connections per statement and provides neither. This currently appears to work
+// over the runtime connection only because every migration is already applied, so MigrateAsync
+// never has to take the lock — the first cold deploy with a pending migration is where that
+// silence would end. The throwaway context is disposed before the app serves anything, so the
+// session-pooler connection is not held for the process lifetime.
+await using (var migrationDb = new AppDbContext(
+    new DbContextOptionsBuilder<AppDbContext>()
+        .UseNpgsql(
+            Required("SLINGKING_DB_MIGRATION"),
+            npgsql => npgsql.MigrationsHistoryTable("__ef_migrations_history"))
+        .UseSnakeCaseNamingConvention()
+        .Options))
+{
+    await migrationDb.Database.MigrateAsync();
+}
+
 using (var scope = app.Services.CreateScope())
 {
-    var services = scope.ServiceProvider;
-    await services.GetRequiredService<AppDbContext>().Database.MigrateAsync();
-    await services.GetRequiredService<DatabaseSeeder>().SeedAsync();
+    await scope.ServiceProvider.GetRequiredService<DatabaseSeeder>().SeedAsync();
 }
 
 app.Run();
