@@ -1,0 +1,64 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap");
+@import "tailwindcss";
+
+@theme {
+  /* Cool canvas, not warm cream. */
+  --color-canvas: #edefea;
+  --color-panel: #ffffff;
+  --color-thread: #141a17;
+  --color-saddle: #a85d2e;
+  --color-ledger: #0c6b57;
+  --color-flag: #9c2b2b;
+  --color-muted: #6b7671;
+  --color-rule: #d5d9d2;
+
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", monospace;
+
+  --radius-stamp: 3px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-thread);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Every number in this application is monospace and tabular. Figures must align
+   in a column and SKUs must be scannable — this is a functional rule. */
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* The topstitch: a stitch line inset from an edge, the way it runs on a bag panel.
+   It marks edges and nothing else. */
+.topstitch {
+  border-top: 1px dashed var(--color-saddle);
+  opacity: 0.55;
+}
+
+/* Visible keyboard focus everywhere, in the accent. */
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--color-saddle);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
