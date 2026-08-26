@@ -151,16 +151,30 @@ One migration, both halves database-enforced invariants:
 
 ```sql
 create unique index ux_variant_combination
-  on product_variants (product_id, coalesce(colour, ''), coalesce(size, ''));
+    on product_variants (product_id, coalesce(colour, ''), coalesce(size, ''))
+ where is_active;
 
 alter table product_variants
   add constraint ck_variant_threshold_non_negative
   check (low_stock_threshold >= 0);
+
+create unique index ux_categories_name on categories (lower(name));
 ```
 
 The `coalesce` is load-bearing. A plain unique index on
 `(product_id, colour, size)` would **not** catch a duplicate, because Postgres
 treats each `NULL` as distinct — so `(1, 'Tan', NULL)` could be inserted twice.
+
+**The `where is_active` predicate is load-bearing too**, and was added while
+writing the implementation plan. Without it, retiring "Tan" would permanently
+forbid ever selling a Tan of that product again — the retired row keeps
+occupying the combination for ever. The invariant that actually matches the
+business is *at most one **active** variant per colour and size*, which is what
+the partial index expresses.
+
+`ux_categories_name` is on `lower(name)` so "Slings" and "slings" cannot both
+exist. Without it, the duplicate check in `CategoryService` would be the only
+thing holding that invariant.
 
 `low_stock_threshold` currently has no check constraint at all, so a negative
 threshold is possible today.
