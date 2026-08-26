@@ -450,6 +450,12 @@ public class ProductEndpointTests : IClassFixture<SlingKingApiFactory>, IAsyncLi
                 [new VariantPayload(null, "Tan", null, 2100m, 1, true)]));
 
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        // Assert the message, not just the status. The DbUpdateException catch also yields a
+        // 409, so a status-only assertion is satisfied by the very safety net that would catch
+        // this bug's absence — the test would pass with the union deleted.
+        var body = await response.Content.ReadAsStringAsync();
+        body.ShouldContain("Each combination may appear once");
     }
 
     [Fact]

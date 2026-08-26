@@ -359,7 +359,7 @@ public sealed class ProductService : IProductService
             await _db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException dbFailure)
         {
             // ux_variant_combination is a partial unique index, so Postgres enforces it per
             // row as the batch lands rather than at commit. Two active variants swapping
@@ -367,7 +367,8 @@ public sealed class ProductService : IProductService
             // answer is to say so, not to return a generic 500.
             throw CatalogException.Conflict(
                 "That change would give two active variants the same colour and size. " +
-                "If you are swapping colours between variants, save the change in two steps.");
+                "If you are swapping colours between variants, save the change in two steps.",
+                dbFailure);
         }
 
         return (await GetAsync(id, cancellationToken))!;

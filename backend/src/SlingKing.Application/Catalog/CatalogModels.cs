@@ -10,11 +10,19 @@ public sealed class CatalogException : Exception
 {
     public int StatusCode { get; }
 
-    private CatalogException(int statusCode, string message) : base(message) =>
-        StatusCode = statusCode;
+    private CatalogException(int statusCode, string message, Exception? inner = null)
+        : base(message, inner) => StatusCode = statusCode;
 
     public static CatalogException NotFound(string message) => new(404, message);
-    public static CatalogException Conflict(string message) => new(409, message);
+
+    /// <summary>
+    /// <paramref name="inner"/> is for a rejection we inferred from a database failure rather
+    /// than checked ourselves. It never reaches the client — the handler logs it so an
+    /// unexpected failure is not silently dressed up as an ordinary conflict.
+    /// </summary>
+    public static CatalogException Conflict(string message, Exception? inner = null) =>
+        new(409, message, inner);
+
     public static CatalogException Invalid(string message) => new(400, message);
 }
 

@@ -25,9 +25,22 @@ public sealed class ProblemDetailsExceptionHandler : IExceptionHandler
         // is returned verbatim. Everything below this block still becomes a generic 500.
         if (exception is CatalogException rejected)
         {
-            _logger.LogInformation(
-                "Rejected {Method} {Path}: {Reason}",
-                context.Request.Method, context.Request.Path, rejected.Message);
+            if (rejected.InnerException is null)
+            {
+                _logger.LogInformation(
+                    "Rejected {Method} {Path}: {Reason}",
+                    context.Request.Method, context.Request.Path, rejected.Message);
+            }
+            else
+            {
+                // Inferred from a database failure rather than checked up front. The client
+                // still sees only the authored message; the cause belongs in the log, because
+                // an unexpected failure must not be indistinguishable from an ordinary refusal.
+                _logger.LogError(
+                    rejected.InnerException,
+                    "Rejected {Method} {Path} on a database failure: {Reason}",
+                    context.Request.Method, context.Request.Path, rejected.Message);
+            }
 
             var rejectionProblem = new ProblemDetails
             {
