@@ -229,4 +229,65 @@ public class ProductEndpointTests : IClassFixture<SlingKingApiFactory>, IAsyncLi
         var db = scope.ServiceProvider.GetRequiredService<IAppDbContext>();
         (await db.Products.AnyAsync(p => p.Name == "Doomed Sling")).ShouldBeFalse();
     }
+
+    private async Task<List<ProductView>> ListAsync(string query = "")
+    {
+        var products = await _client.GetFromJsonAsync<List<ProductView>>(
+            $"/api/v1/products{query}");
+
+        return products!;
+    }
+
+    [Fact]
+    public async Task A_created_product_appears_in_the_list()
+    {
+        var created = await CreateAsync(TwoColours($"Listed {Guid.NewGuid():N}"[..20]));
+
+        var products = await ListAsync();
+
+        products.ShouldContain(p => p.Id == created.Id);
+    }
+
+    [Fact]
+    public async Task Search_matches_the_product_name()
+    {
+        var marker = $"Findable{Guid.NewGuid():N}"[..18];
+        var created = await CreateAsync(TwoColours(marker));
+
+        var products = await ListAsync($"?search={marker}");
+
+        products.Count.ShouldBe(1);
+        products[0].Id.ShouldBe(created.Id);
+    }
+
+    [Fact]
+    public async Task Search_matches_the_product_code()
+    {
+        var created = await CreateAsync(TwoColours($"ByCode {Guid.NewGuid():N}"[..18]));
+
+        var products = await ListAsync($"?search={created.Code}");
+
+        products.ShouldContain(p => p.Id == created.Id);
+    }
+
+    [Fact]
+    public async Task Search_matches_a_variant_sku()
+    {
+        var created = await CreateAsync(TwoColours($"BySku {Guid.NewGuid():N}"[..18]));
+
+        var products = await ListAsync($"?search={created.Variants[1].Sku}");
+
+        products.ShouldContain(p => p.Id == created.Id);
+    }
+
+    [Fact]
+    public async Task Search_is_case_insensitive()
+    {
+        var marker = $"CaseTest{Guid.NewGuid():N}"[..18];
+        await CreateAsync(TwoColours(marker));
+
+        var products = await ListAsync($"?search={marker.ToUpper()}");
+
+        products.Count.ShouldBe(1);
+    }
 }

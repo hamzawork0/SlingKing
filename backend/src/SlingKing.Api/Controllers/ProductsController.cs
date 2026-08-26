@@ -23,6 +23,14 @@ public class ProductsController : ControllerBase
                 v.Id, v.Colour, v.Size, v.SellingPrice, v.LowStockThreshold, v.IsActive))
             .ToList());
 
+    [HttpGet]
+    [ProducesResponseType(typeof(IReadOnlyList<ProductView>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> List(
+        [FromQuery] string? search,
+        [FromQuery] bool includeInactive,
+        CancellationToken cancellationToken) =>
+        Ok(await _products.ListAsync(search, includeInactive, cancellationToken));
+
     [HttpGet("{id:long}")]
     [ProducesResponseType(typeof(ProductView), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

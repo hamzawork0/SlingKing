@@ -180,4 +180,51 @@ public sealed class ProductService : IProductService
 
         return (await GetAsync(product.Id, cancellationToken))!;
     }
+
+    public async Task<IReadOnlyList<ProductView>> ListAsync(
+        string? search,
+        bool includeInactive,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _db.Products.AsNoTracking();
+
+        if (!includeInactive)
+        {
+            query = query.Where(p => p.IsActive);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = $"%{search.Trim()}%";
+
+            // ILike is Npgsql's case-insensitive LIKE and translates to SQL. ToLower() on
+            // both sides would work too but defeats any index we add later.
+            query = query.Where(p =>
+                EF.Functions.ILike(p.Name, term) ||
+                EF.Functions.ILike(p.Code, term) ||
+                p.Variants.Any(v => EF.Functions.ILike(v.Sku, term)));
+        }
+
+        var ids = await query
+            .OrderByDescending(p => p.Id)
+            .Select(p => p.Id)
+            .ToListAsync(cancellationToken);
+
+        // ponytail: N+1 by construction — one GetAsync per product. Fine for a catalogue of
+        // a few hundred bags on a single-user system. Replace with one projected query if
+        // the list ever feels slow.
+        var products = new List<ProductView>(ids.Count);
+
+        foreach (var id in ids)
+        {
+            var product = await GetAsync(id, cancellationToken);
+
+            if (product is not null)
+            {
+                products.Add(product);
+            }
+        }
+
+        return products;
+    }
 }

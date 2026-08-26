@@ -11,4 +11,14 @@ public interface IProductService
     /// variant list yields one variant with no colour and no size.
     /// </summary>
     Task<ProductView> CreateAsync(ProductInput input, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Newest first. <paramref name="search"/> matches product name, product code and
+    /// variant SKU, case-insensitively. <paramref name="includeInactive"/> applies to
+    /// products only — variants always come back, each carrying its own IsActive.
+    /// </summary>
+    Task<IReadOnlyList<ProductView>> ListAsync(
+        string? search,
+        bool includeInactive,
+        CancellationToken cancellationToken = default);
 }
