@@ -21,4 +21,13 @@ public interface IProductService
         string? search,
         bool includeInactive,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Takes the whole product including its complete variant list, in one transaction. A row
+    /// with an id is updated in place; a row without one is created and takes the next
+    /// ordinal; IsActive false retires a row. A variant absent from the list is left
+    /// untouched — absence never means deletion.
+    /// </summary>
+    Task<ProductView> UpdateAsync(
+        long id, ProductInput input, CancellationToken cancellationToken = default);
 }

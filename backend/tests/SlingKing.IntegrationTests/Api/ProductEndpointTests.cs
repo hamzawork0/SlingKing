@@ -290,4 +290,153 @@ public class ProductEndpointTests : IClassFixture<SlingKingApiFactory>, IAsyncLi
 
         products.Count.ShouldBe(1);
     }
+
+    private async Task<ProductView> UpdateAsync(long id, ProductPayload payload)
+    {
+        var response = await _client.PutAsJsonAsync($"/api/v1/products/{id}", payload);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return (await response.Content.ReadFromJsonAsync<ProductView>())!;
+    }
+
+    private static VariantPayload Keep(VariantView v, decimal? price = null, bool? active = null) =>
+        new(v.Id, v.Colour, v.Size, price ?? v.SellingPrice, v.LowStockThreshold,
+            active ?? v.IsActive);
+
+    [Fact]
+    public async Task Updating_changes_the_name_and_keeps_the_code()
+    {
+        var product = await CreateAsync(TwoColours("Original Name"));
+
+        var updated = await UpdateAsync(product.Id, new ProductPayload(
+            "Renamed", null, "Now with a description",
+            product.Variants.Select(v => Keep(v)).ToList()));
+
+        updated.Name.ShouldBe("Renamed");
+        updated.Description.ShouldBe("Now with a description");
+        updated.Code.ShouldBe(product.Code);
+    }
+
+    [Fact]
+    public async Task An_existing_variant_is_updated_in_place_and_keeps_its_sku()
+    {
+        var product = await CreateAsync(TwoColours("Reprice Me"));
+        var tan = product.Variants[0];
+
+        var updated = await UpdateAsync(product.Id, new ProductPayload(
+            product.Name, null, null,
+            [Keep(tan, price: 1950m), Keep(product.Variants[1])]));
+
+        var repriced = updated.Variants.Single(v => v.Id == tan.Id);
+        repriced.SellingPrice.ShouldBe(1950m);
+        repriced.Sku.ShouldBe(tan.Sku);
+    }
+
+    [Fact]
+    public async Task A_variant_with_no_id_is_created_and_takes_the_next_ordinal()
+    {
+        var product = await CreateAsync(TwoColours("Growing Range"));
+
+        var updated = await UpdateAsync(product.Id, new ProductPayload(
+            product.Name, null, null,
+            [
+                Keep(product.Variants[0]),
+                Keep(product.Variants[1]),
+                new VariantPayload(null, "Brown", null, 1900m, 1, true)
+            ]));
+
+        updated.Variants.Count.ShouldBe(3);
+        updated.Variants.Single(v => v.Colour == "Brown").Sku.ShouldBe($"{product.Code}-V03");
+    }
+
+    [Fact]
+    public async Task A_variant_created_by_an_update_also_gets_a_stock_row()
+    {
+        var product = await CreateAsync(TwoColours("Late Variant"));
+
+        var updated = await UpdateAsync(product.Id, new ProductPayload(
+            product.Name, null, null,
+            [
+                Keep(product.Variants[0]),
+                Keep(product.Variants[1]),
+                new VariantPayload(null, "Olive", null, 1900m, 1, true)
+            ]));
+
+        var olive = updated.Variants.Single(v => v.Colour == "Olive");
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IAppDbContext>();
+
+        (await db.StockLevels.SingleOrDefaultAsync(s => s.VariantId == olive.Id))
+            .ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task Setting_is_active_false_retires_a_variant_without_removing_it()
+    {
+        var product = await CreateAsync(TwoColours("Retire One"));
+        var black = product.Variants[1];
+
+        var updated = await UpdateAsync(product.Id, new ProductPayload(
+            product.Name, null, null,
+            [Keep(product.Variants[0]), Keep(black, active: false)]));
+
+        updated.Variants.Count.ShouldBe(2);
+        updated.Variants.Single(v => v.Id == black.Id).IsActive.ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// "Missing means delete" is how this pattern destroys data the first time a bug drops a
+    /// row from the array. Omission must be inert; only an explicit flag retires anything.
+    /// </summary>
+    [Fact]
+    public async Task A_variant_omitted_from_the_payload_is_left_untouched()
+    {
+        var product = await CreateAsync(TwoColours("Omission Test"));
+        var black = product.Variants[1];
+
+        var updated = await UpdateAsync(product.Id, new ProductPayload(
+            product.Name, null, null, [Keep(product.Variants[0])]));
+
+        updated.Variants.Count.ShouldBe(2);
+        updated.Variants.Single(v => v.Id == black.Id).IsActive.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task A_retired_colour_can_be_reintroduced()
+    {
+        var product = await CreateAsync(TwoColours("Comeback Tan"));
+        var tan = product.Variants[0];
+
+        await UpdateAsync(product.Id, new ProductPayload(
+            product.Name, null, null,
+            [Keep(tan, active: false), Keep(product.Variants[1])]));
+
+        var updated = await UpdateAsync(product.Id, new ProductPayload(
+            product.Name, null, null,
+            [new VariantPayload(null, "Tan", null, 2100m, 1, true)]));
+
+        updated.Variants.Count(v => v.Colour == "Tan").ShouldBe(2);
+        updated.Variants.Count(v => v.Colour == "Tan" && v.IsActive).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_variant_belonging_to_another_product_is_rejected()
+    {
+        var mine = await CreateAsync(TwoColours("Mine"));
+        var theirs = await CreateAsync(TwoColours("Theirs"));
+
+        var response = await _client.PutAsJsonAsync($"/api/v1/products/{mine.Id}",
+            new ProductPayload(mine.Name, null, null, [Keep(theirs.Variants[0])]));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Updating_an_unknown_product_is_not_found()
+    {
+        var response = await _client.PutAsJsonAsync("/api/v1/products/999999",
+            new ProductPayload("Ghost", null, null, []));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
 }

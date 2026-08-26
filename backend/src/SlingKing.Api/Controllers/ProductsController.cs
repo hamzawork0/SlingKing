@@ -58,4 +58,21 @@ public class ProductsController : ControllerBase
 
         return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
     }
+
+    [HttpPut("{id:long}")]
+    [ProducesResponseType(typeof(ProductView), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Update(
+        long id, ProductRequest request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            ModelState.AddModelError(nameof(request.Name), "The Name field is required.");
+            return ValidationProblem(ModelState);
+        }
+
+        return Ok(await _products.UpdateAsync(id, ToInput(request), cancellationToken));
+    }
 }

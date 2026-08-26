@@ -229,4 +229,112 @@ public sealed class ProductService : IProductService
 
         return products;
     }
+
+    public async Task<ProductView> UpdateAsync(
+        long id, ProductInput input, CancellationToken cancellationToken = default)
+    {
+        var product = await _db.Products
+            .Include(p => p.Variants)
+            .SingleOrDefaultAsync(p => p.Id == id, cancellationToken)
+            ?? throw CatalogException.NotFound("That product does not exist.");
+
+        await RequireKnownCategoryAsync(input.CategoryId, cancellationToken);
+        RejectInvalidVariants(input.Variants);
+
+        var known = product.Variants.ToDictionary(v => v.Id);
+
+        foreach (var row in input.Variants.Where(r => r.Id is not null))
+        {
+            if (!known.ContainsKey(row.Id!.Value))
+            {
+                throw CatalogException.Invalid(
+                    "A variant in the request does not belong to this product.");
+            }
+        }
+
+        // The combination check must consider the product's whole active picture after the
+        // edit, not just the rows in the payload — an untouched variant still occupies its
+        // colour. Rows the payload does not mention keep whatever state they already had.
+        var mentioned = input.Variants
+            .Where(r => r.Id is not null)
+            .Select(r => r.Id!.Value)
+            .ToHashSet();
+
+        var resulting = input.Variants
+            .Concat(product.Variants
+                .Where(v => !mentioned.Contains(v.Id))
+                .Select(v => new VariantInput(
+                    v.Id, v.Colour, v.Size, v.SellingPrice, v.LowStockThreshold, v.IsActive)))
+            .ToList();
+
+        RejectDuplicateCombinations(resulting);
+
+        var now = _clock.UtcNow;
+        var defaultLocationId = await DefaultLocationIdAsync(cancellationToken);
+
+        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+
+        product.Name = input.Name.Trim();
+        product.CategoryId = input.CategoryId;
+        product.Description = Normalise(input.Description);
+        product.UpdatedAt = now;
+
+        // Ordinals come from the count of every variant ever created for this product,
+        // active or not. Variants are never removed, so the count only grows and an ordinal
+        // is never reused.
+        var ordinal = product.Variants.Count;
+        var created = new List<ProductVariant>();
+
+        foreach (var row in input.Variants)
+        {
+            if (row.Id is not null)
+            {
+                var existing = known[row.Id.Value];
+                existing.Colour = Normalise(row.Colour);
+                existing.Size = Normalise(row.Size);
+                existing.SellingPrice = row.SellingPrice;
+                existing.LowStockThreshold = row.LowStockThreshold;
+                existing.IsActive = row.IsActive;
+                existing.UpdatedAt = now;
+                continue;
+            }
+
+            ordinal++;
+
+            var variant = new ProductVariant
+            {
+                ProductId = product.Id,
+                Sku = $"{product.Code}-V{ordinal:00}",
+                Colour = Normalise(row.Colour),
+                Size = Normalise(row.Size),
+                SellingPrice = row.SellingPrice,
+                LowStockThreshold = row.LowStockThreshold,
+                IsActive = row.IsActive,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            _db.ProductVariants.Add(variant);
+            created.Add(variant);
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+
+        foreach (var variant in created)
+        {
+            _db.StockLevels.Add(new StockLevel
+            {
+                VariantId = variant.Id,
+                LocationId = defaultLocationId,
+                PhysicalQty = 0,
+                ReservedQty = 0,
+                UpdatedAt = now
+            });
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return (await GetAsync(id, cancellationToken))!;
+    }
 }
