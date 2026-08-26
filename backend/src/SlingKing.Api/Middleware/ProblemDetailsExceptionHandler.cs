@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using SlingKing.Application.Catalog;
 
 namespace SlingKing.Api.Middleware;
 
@@ -19,6 +20,33 @@ public sealed class ProblemDetailsExceptionHandler : IExceptionHandler
     public async ValueTask<bool> TryHandleAsync(
         HttpContext context, Exception exception, CancellationToken cancellationToken)
     {
+        // A rejected request is not a failure of ours. It is logged at information level and
+        // its message — authored in CatalogException, never derived from an inner exception —
+        // is returned verbatim. Everything below this block still becomes a generic 500.
+        if (exception is CatalogException rejected)
+        {
+            _logger.LogInformation(
+                "Rejected {Method} {Path}: {Reason}",
+                context.Request.Method, context.Request.Path, rejected.Message);
+
+            var rejectionProblem = new ProblemDetails
+            {
+                Status = rejected.StatusCode,
+                Title = rejected.Message,
+                Instance = context.Request.Path
+            };
+
+            context.Response.StatusCode = rejected.StatusCode;
+
+            await context.Response.WriteAsJsonAsync(
+                rejectionProblem,
+                options: null,
+                contentType: "application/problem+json",
+                cancellationToken: cancellationToken);
+
+            return true;
+        }
+
         _logger.LogError(exception,
             "Unhandled exception on {Method} {Path}", context.Request.Method, context.Request.Path);
 
