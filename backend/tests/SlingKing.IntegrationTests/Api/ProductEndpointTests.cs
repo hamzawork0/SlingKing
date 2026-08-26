@@ -460,4 +460,64 @@ public class ProductEndpointTests : IClassFixture<SlingKingApiFactory>, IAsyncLi
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
+
+    /// <summary>
+    /// The case the retirements-first pass exists for. ux_variant_combination is a partial
+    /// unique index, checked per row as the batch lands rather than at commit — so freeing
+    /// "Black" and claiming it must not happen in the same write. Before the fix this passed
+    /// the in-memory check and then died in the database as a 500.
+    /// </summary>
+    [Fact]
+    public async Task A_colour_can_be_reused_in_the_same_save_that_retires_its_previous_holder()
+    {
+        var product = await CreateAsync(TwoColours("Handover"));
+        var tan = product.Variants.Single(v => v.Colour == "Tan");
+        var black = product.Variants.Single(v => v.Colour == "Black");
+
+        var updated = await UpdateAsync(product.Id, new ProductPayload(
+            product.Name, null, null,
+            [
+                new VariantPayload(tan.Id, "Black", null, tan.SellingPrice, tan.LowStockThreshold, true),
+                Keep(black, active: false)
+            ]));
+
+        updated.Variants.Single(v => v.Id == tan.Id).Colour.ShouldBe("Black");
+        updated.Variants.Single(v => v.Id == tan.Id).IsActive.ShouldBeTrue();
+        updated.Variants.Single(v => v.Id == black.Id).IsActive.ShouldBeFalse();
+        updated.Variants.Count(v => v.IsActive && v.Colour == "Black").ShouldBe(1);
+    }
+
+    /// <summary>
+    /// Two active variants swapping colours cannot be ordered to succeed against a partial
+    /// unique index, and a sentinel value would be worse than the problem. So it must be
+    /// refused in a way the owner can act on — a 409 that says save it in two steps — never
+    /// a generic 500.
+    /// </summary>
+    [Fact]
+    public async Task Swapping_two_active_colours_in_one_save_is_refused_with_a_conflict()
+    {
+        var product = await CreateAsync(TwoColours("Swap Me"));
+        var tan = product.Variants.Single(v => v.Colour == "Tan");
+        var black = product.Variants.Single(v => v.Colour == "Black");
+
+        var response = await _client.PutAsJsonAsync($"/api/v1/products/{product.Id}",
+            new ProductPayload(product.Name, null, null,
+            [
+                new VariantPayload(tan.Id, "Black", null, tan.SellingPrice, tan.LowStockThreshold, true),
+                new VariantPayload(black.Id, "Tan", null, black.SellingPrice, black.LowStockThreshold, true)
+            ]));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        var body = await response.Content.ReadAsStringAsync();
+        body.ShouldContain("two steps");
+        body.ShouldNotContain("Exception");
+        body.ShouldNotContain("SlingKing");
+        body.ShouldNotContain("   at ");
+
+        // The refusal must leave both variants exactly as they were.
+        var after = await _client.GetFromJsonAsync<ProductView>($"/api/v1/products/{product.Id}");
+        after!.Variants.Single(v => v.Id == tan.Id).Colour.ShouldBe("Tan");
+        after.Variants.Single(v => v.Id == black.Id).Colour.ShouldBe("Black");
+    }
 }
