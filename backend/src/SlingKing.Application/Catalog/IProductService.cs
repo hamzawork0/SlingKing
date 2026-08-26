@@ -30,4 +30,11 @@ public interface IProductService
     /// </summary>
     Task<ProductView> UpdateAsync(
         long id, ProductInput input, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Marks the product inactive. Variant rows are deliberately untouched, so reactivating
+    /// restores exactly the states they had. Throws <see cref="CatalogException"/> with 404
+    /// if no product has that id. Nothing is ever deleted.
+    /// </summary>
+    Task DeactivateAsync(long id, CancellationToken cancellationToken = default);
 }

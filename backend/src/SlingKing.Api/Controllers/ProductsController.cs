@@ -76,4 +76,14 @@ public class ProductsController : ControllerBase
 
         return Ok(await _products.UpdateAsync(id, ToInput(request), cancellationToken));
     }
+
+    [HttpPost("{id:long}/deactivate")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Deactivate(long id, CancellationToken cancellationToken)
+    {
+        await _products.DeactivateAsync(id, cancellationToken);
+
+        return NoContent();
+    }
 }

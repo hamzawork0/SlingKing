@@ -373,4 +373,15 @@ public sealed class ProductService : IProductService
 
         return (await GetAsync(id, cancellationToken))!;
     }
+
+    public async Task DeactivateAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var product = await _db.Products.SingleOrDefaultAsync(p => p.Id == id, cancellationToken)
+            ?? throw CatalogException.NotFound("That product does not exist.");
+
+        product.IsActive = false;
+        product.UpdatedAt = _clock.UtcNow;
+
+        await _db.SaveChangesAsync(cancellationToken);
+    }
 }

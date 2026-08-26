@@ -526,4 +526,60 @@ public class ProductEndpointTests : IClassFixture<SlingKingApiFactory>, IAsyncLi
         after!.Variants.Single(v => v.Id == tan.Id).Colour.ShouldBe("Tan");
         after.Variants.Single(v => v.Id == black.Id).Colour.ShouldBe("Black");
     }
+
+    [Fact]
+    public async Task Deactivating_hides_a_product_from_the_default_list()
+    {
+        var marker = $"Retired{Guid.NewGuid():N}"[..18];
+        var product = await CreateAsync(TwoColours(marker));
+
+        var response = await _client.PostAsync(
+            $"/api/v1/products/{product.Id}/deactivate", content: null);
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        (await ListAsync($"?search={marker}")).ShouldBeEmpty();
+        (await ListAsync($"?search={marker}&includeInactive=true")).Count.ShouldBe(1);
+    }
+
+    /// <summary>
+    /// Deactivating the product must not touch variant rows, so reactivating restores exactly
+    /// the states they had rather than reviving ones retired individually.
+    /// </summary>
+    [Fact]
+    public async Task Deactivating_a_product_leaves_its_variant_states_alone()
+    {
+        var product = await CreateAsync(TwoColours("States Preserved"));
+
+        await UpdateAsync(product.Id, new ProductPayload(
+            product.Name, null, null,
+            [Keep(product.Variants[0]), Keep(product.Variants[1], active: false)]));
+
+        await _client.PostAsync($"/api/v1/products/{product.Id}/deactivate", content: null);
+
+        var fetched = await _client.GetFromJsonAsync<ProductView>($"/api/v1/products/{product.Id}");
+
+        fetched!.IsActive.ShouldBeFalse();
+        fetched.Variants.Single(v => v.Id == product.Variants[0].Id).IsActive.ShouldBeTrue();
+        fetched.Variants.Single(v => v.Id == product.Variants[1].Id).IsActive.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Deactivating_keeps_the_row()
+    {
+        var product = await CreateAsync(TwoColours("Still Here"));
+
+        await _client.PostAsync($"/api/v1/products/{product.Id}/deactivate", content: null);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IAppDbContext>();
+
+        (await db.Products.AnyAsync(p => p.Id == product.Id)).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Deactivating_an_unknown_product_is_not_found()
+    {
+        (await _client.PostAsync("/api/v1/products/999999/deactivate", content: null))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
 }
