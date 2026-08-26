@@ -20,7 +20,8 @@ public class ProductsController : ControllerBase
         request.Description,
         (request.Variants ?? [])
             .Select(v => new VariantInput(
-                v.Id, v.Colour, v.Size, v.SellingPrice, v.LowStockThreshold, v.IsActive))
+                v.Id, v.Colour, v.Size, v.SellingPrice!.Value, v.LowStockThreshold!.Value,
+                v.IsActive!.Value))
             .ToList());
 
     [HttpGet]

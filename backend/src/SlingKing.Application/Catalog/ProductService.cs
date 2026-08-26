@@ -252,6 +252,13 @@ public sealed class ProductService : IProductService
             }
         }
 
+        var withIds = input.Variants.Where(r => r.Id is not null).Select(r => r.Id!.Value).ToList();
+
+        if (withIds.Count != withIds.Distinct().Count())
+        {
+            throw CatalogException.Invalid("The same variant appears more than once in the request.");
+        }
+
         // The combination check must consider the product's whole active picture after the
         // edit, not just the rows in the payload — an untouched variant still occupies its
         // colour. Rows the payload does not mention keep whatever state they already had.
@@ -285,55 +292,83 @@ public sealed class ProductService : IProductService
         var ordinal = product.Variants.Count;
         var created = new List<ProductVariant>();
 
-        foreach (var row in input.Variants)
+        try
         {
-            if (row.Id is not null)
+            // ux_variant_combination is a partial unique index, so Postgres checks it per row
+            // as a batch lands rather than deferring to commit. RejectDuplicateCombinations
+            // above only proves the FINAL state is clean; it says nothing about the order EF
+            // sends the UPDATEs in. Applying retirements first, and saving, frees a combination
+            // before anything else can claim it — that is what lets a payload rename a colour
+            // onto one being retired in the same update.
+            foreach (var row in input.Variants.Where(r => r.Id is not null && !r.IsActive))
             {
-                var existing = known[row.Id.Value];
-                existing.Colour = Normalise(row.Colour);
-                existing.Size = Normalise(row.Size);
-                existing.SellingPrice = row.SellingPrice;
-                existing.LowStockThreshold = row.LowStockThreshold;
-                existing.IsActive = row.IsActive;
-                existing.UpdatedAt = now;
-                continue;
+                var retiring = known[row.Id!.Value];
+                retiring.IsActive = false;
+                retiring.UpdatedAt = now;
             }
 
-            ordinal++;
+            await _db.SaveChangesAsync(cancellationToken);
 
-            var variant = new ProductVariant
+            foreach (var row in input.Variants)
             {
-                ProductId = product.Id,
-                Sku = $"{product.Code}-V{ordinal:00}",
-                Colour = Normalise(row.Colour),
-                Size = Normalise(row.Size),
-                SellingPrice = row.SellingPrice,
-                LowStockThreshold = row.LowStockThreshold,
-                IsActive = row.IsActive,
-                CreatedAt = now,
-                UpdatedAt = now
-            };
+                if (row.Id is not null)
+                {
+                    var existing = known[row.Id.Value];
+                    existing.Colour = Normalise(row.Colour);
+                    existing.Size = Normalise(row.Size);
+                    existing.SellingPrice = row.SellingPrice;
+                    existing.LowStockThreshold = row.LowStockThreshold;
+                    existing.IsActive = row.IsActive;
+                    existing.UpdatedAt = now;
+                    continue;
+                }
 
-            _db.ProductVariants.Add(variant);
-            created.Add(variant);
+                ordinal++;
+
+                var variant = new ProductVariant
+                {
+                    ProductId = product.Id,
+                    Sku = $"{product.Code}-V{ordinal:00}",
+                    Colour = Normalise(row.Colour),
+                    Size = Normalise(row.Size),
+                    SellingPrice = row.SellingPrice,
+                    LowStockThreshold = row.LowStockThreshold,
+                    IsActive = row.IsActive,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
+
+                _db.ProductVariants.Add(variant);
+                created.Add(variant);
+            }
+
+            await _db.SaveChangesAsync(cancellationToken);
+
+            foreach (var variant in created)
+            {
+                _db.StockLevels.Add(new StockLevel
+                {
+                    VariantId = variant.Id,
+                    LocationId = defaultLocationId,
+                    PhysicalQty = 0,
+                    ReservedQty = 0,
+                    UpdatedAt = now
+                });
+            }
+
+            await _db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
-
-        await _db.SaveChangesAsync(cancellationToken);
-
-        foreach (var variant in created)
+        catch (DbUpdateException)
         {
-            _db.StockLevels.Add(new StockLevel
-            {
-                VariantId = variant.Id,
-                LocationId = defaultLocationId,
-                PhysicalQty = 0,
-                ReservedQty = 0,
-                UpdatedAt = now
-            });
+            // ux_variant_combination is a partial unique index, so Postgres enforces it per
+            // row as the batch lands rather than at commit. Two active variants swapping
+            // colours in a single save therefore cannot be ordered to succeed — the honest
+            // answer is to say so, not to return a generic 500.
+            throw CatalogException.Conflict(
+                "That change would give two active variants the same colour and size. " +
+                "If you are swapping colours between variants, save the change in two steps.");
         }
-
-        await _db.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
 
         return (await GetAsync(id, cancellationToken))!;
     }

@@ -398,7 +398,10 @@ public class ProductEndpointTests : IClassFixture<SlingKingApiFactory>, IAsyncLi
             product.Name, null, null, [Keep(product.Variants[0])]));
 
         updated.Variants.Count.ShouldBe(2);
-        updated.Variants.Single(v => v.Id == black.Id).IsActive.ShouldBeTrue();
+        var untouched = updated.Variants.Single(v => v.Id == black.Id);
+        untouched.IsActive.ShouldBeTrue();
+        untouched.SellingPrice.ShouldBe(black.SellingPrice);
+        untouched.Sku.ShouldBe(black.Sku);
     }
 
     [Fact]
@@ -429,6 +432,24 @@ public class ProductEndpointTests : IClassFixture<SlingKingApiFactory>, IAsyncLi
             new ProductPayload(mine.Name, null, null, [Keep(theirs.Variants[0])]));
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    /// <summary>
+    /// An untouched variant still occupies its colour. Without the union of unmentioned
+    /// existing rows into the duplicate check, this payload is accepted and dies in the
+    /// database as a 500 instead of being refused as a conflict.
+    /// </summary>
+    [Fact]
+    public async Task A_new_variant_clashing_with_an_unmentioned_active_one_is_rejected()
+    {
+        var product = await CreateAsync(TwoColours("Unmentioned Clash"));
+
+        // Mentions neither existing variant; both stay active, and Tan is still taken.
+        var response = await _client.PutAsJsonAsync($"/api/v1/products/{product.Id}",
+            new ProductPayload(product.Name, null, null,
+                [new VariantPayload(null, "Tan", null, 2100m, 1, true)]));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
     }
 
     [Fact]

@@ -11,9 +11,9 @@ public record VariantRequest(
     long? Id,
     [MaxLength(64)] string? Colour,
     [MaxLength(64)] string? Size,
-    [Range(0, 9_999_999)] decimal SellingPrice,
-    [Range(0, int.MaxValue)] int LowStockThreshold,
-    bool IsActive);
+    [Required, Range(0, 9_999_999)] decimal? SellingPrice,
+    [Required, Range(0, int.MaxValue)] int? LowStockThreshold,
+    [Required] bool? IsActive);
 
 public record ProductRequest(
     [Required, MinLength(1), MaxLength(256)] string Name,
