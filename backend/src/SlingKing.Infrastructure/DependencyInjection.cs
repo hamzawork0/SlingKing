@@ -24,6 +24,7 @@ public static class DependencyInjection
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddScoped<INumberSequenceAllocator, NumberSequenceAllocator>();
         services.AddScoped<ICategoryService, CategoryService>();
+        services.AddScoped<IProductService, ProductService>();
 
         // The seeder takes its two credentials as plain constructor arguments rather than
         // reading configuration itself, so nothing but this line knows where they come from.
