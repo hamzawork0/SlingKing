@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { getMe, login as apiLogin, logout as apiLogout, type User } from "../api/auth";
-import { tokenStore } from "../api/client";
+import { isNetworkError, tokenStore } from "../api/client";
 
 interface AuthValue {
   user: User | null;
@@ -32,7 +32,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     getMe()
       .then(setUser)
-      .catch(() => tokenStore.clear())
+      .catch((error) => {
+        // A server we could not reach has told us nothing about our credentials.
+        // Discarding them here would log the owner out over a flaky connection.
+        if (!isNetworkError(error)) tokenStore.clear();
+      })
       .finally(() => setIsLoading(false));
   }, []);
 

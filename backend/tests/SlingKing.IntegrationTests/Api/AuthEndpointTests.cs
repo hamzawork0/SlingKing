@@ -1,3 +1,4 @@
+using System.Text;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -192,5 +193,29 @@ public class AuthEndpointTests : IClassFixture<SlingKingApiFactory>, IAsyncLifet
         var body = await response.Content.ReadAsStringAsync();
         body.ShouldNotContain("Exception");
         body.ShouldNotContain("   at ");
+    }
+
+    /// <summary>
+    /// A body the deserialiser cannot bind used to come back naming the CLR type it failed to
+    /// build — "could not be converted to SlingKing.Api.Contracts.Auth.LoginRequest" — which
+    /// hands a caller our internal namespace for free.
+    /// </summary>
+    [Fact]
+    public async Task An_unbindable_body_is_rejected_without_naming_an_internal_type()
+    {
+        var response = await _client.PostAsync(
+            "/api/v1/auth/login",
+            new StringContent(
+                """{"email":{"nested":"object"},"password":"x"}""",
+                Encoding.UTF8,
+                "application/json"));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType!.MediaType.ShouldBe("application/problem+json");
+
+        var body = await response.Content.ReadAsStringAsync();
+        body.ShouldNotContain("SlingKing");
+        body.ShouldNotContain("Contracts");
+        body.ShouldContain("The request body is not valid JSON.");
     }
 }

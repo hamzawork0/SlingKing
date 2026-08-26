@@ -53,6 +53,15 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+/**
+ * True when the request never got an answer — server down, DNS gone, cable out.
+ * A rejected credential is a 401 with a body; an unreachable server is neither,
+ * and treating the two alike is how a brief outage logs someone out for good.
+ */
+export function isNetworkError(error: unknown): boolean {
+  return axios.isAxiosError(error) && !error.response;
+}
+
 api.interceptors.request.use((config) => {
   const tokens = tokenStore.get();
   if (tokens) {
@@ -83,8 +92,10 @@ async function refreshTokens(): Promise<TokenPair | null> {
     };
     tokenStore.set(next);
     return next;
-  } catch {
-    tokenStore.clear();
+  } catch (error) {
+    // Keep the tokens when the server was simply unreachable — they may still be good.
+    // Only a real rejection means this refresh token is dead.
+    if (!isNetworkError(error)) tokenStore.clear();
     return null;
   }
 }
@@ -96,7 +107,11 @@ api.interceptors.response.use(
       _retried?: boolean;
     };
 
-    const isAuthCall = request?.url?.includes("/auth/");
+    // Only the three endpoints that would recurse: refreshing a login is meaningless,
+    // and retrying the refresh call through the refresh path is an infinite loop.
+    // /auth/me is a normal authenticated call and MUST be refreshable — it is the one
+    // request the app makes on every page load, so excluding it disabled refresh entirely.
+    const isAuthCall = /\/auth\/(login|refresh|logout)$/.test(request?.url ?? "");
 
     if (error.response?.status !== 401 || request?._retried || isAuthCall) {
       return Promise.reject(error);
@@ -111,7 +126,10 @@ api.interceptors.response.use(
     const tokens = await refreshInFlight;
 
     if (!tokens) {
-      window.location.assign("/login");
+      // Bounce to the login screen only if the refresh actually failed. If the tokens
+      // survived, the server was unreachable, not the session dead — let the caller
+      // surface that rather than throwing the user out over a dropped connection.
+      if (!tokenStore.get()) window.location.assign("/login");
       return Promise.reject(error);
     }
 

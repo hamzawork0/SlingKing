@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using SlingKing.Api.Contracts.Auth;
 using SlingKing.Application.Auth;
 
@@ -10,6 +11,9 @@ namespace SlingKing.Api.Controllers;
 [Route("api/v1/auth")]
 public class AuthController : ControllerBase
 {
+    /// <summary>Named here so Program.cs and the attributes below cannot drift apart.</summary>
+    public const string CredentialsRateLimitPolicy = "credentials";
+
     private readonly IAuthService _auth;
 
     public AuthController(IAuthService auth) => _auth = auth;
@@ -42,6 +46,7 @@ public class AuthController : ControllerBase
         new UserDto(tokens.User.Id, tokens.User.Email, tokens.User.DisplayName));
 
     [HttpPost("login")]
+    [EnableRateLimiting(CredentialsRateLimitPolicy)]
     [AllowAnonymous]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -53,6 +58,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("refresh")]
+    [EnableRateLimiting(CredentialsRateLimitPolicy)]
     [AllowAnonymous]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthContext";
+import { isNetworkError } from "../../api/client";
 
 export function LoginPage() {
   const { signIn } = useAuth();
@@ -19,10 +20,16 @@ export function LoginPage() {
     try {
       await signIn(email, password);
       navigate("/", { replace: true });
-    } catch {
-      // One message for every failure. The API does not distinguish "no such user"
-      // from "wrong password", and neither should the screen.
-      setError("Email or password is incorrect.");
+    } catch (err) {
+      // One message for every REJECTED credential: the API does not distinguish
+      // "no such user" from "wrong password", and neither should the screen.
+      // An unreachable server is a different fact, and saying the password is wrong
+      // when it is not sends the owner hunting for a reset that will not help.
+      setError(
+        isNetworkError(err)
+          ? "Cannot reach the server. Check your connection and try again."
+          : "Email or password is incorrect.",
+      );
     } finally {
       setIsSubmitting(false);
     }

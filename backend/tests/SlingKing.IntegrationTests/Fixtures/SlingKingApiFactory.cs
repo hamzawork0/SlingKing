@@ -55,6 +55,11 @@ public class SlingKingApiFactory : WebApplicationFactory<Program>
         Environment.SetEnvironmentVariable("SLINGKING_SEED_ADMIN_EMAIL", SeedEmail);
         Environment.SetEnvironmentVariable("SLINGKING_SEED_ADMIN_PASSWORD", SeedPassword);
 
+        // Every test hits the API from the same loopback address and so shares one rate-limit
+        // partition. At the production limit of ten a minute the suite would start failing on
+        // whichever test happened to run eleventh — a green run must not depend on test order.
+        Environment.SetEnvironmentVariable("SLINGKING_LOGIN_ATTEMPTS_PER_MINUTE", "1000");
+
         builder.UseEnvironment("Testing");
     }
 }

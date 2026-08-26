@@ -9,7 +9,9 @@
   --color-saddle: #a85d2e;
   --color-ledger: #0c6b57;
   --color-flag: #9c2b2b;
-  --color-muted: #6b7671;
+  /* Darkened from #6b7671: that measured 4.07:1 on the canvas, under the 4.5:1 AA
+     floor for text below 24px. This clears it at 4.56 on canvas, 5.28 on panel. */
+  --color-muted: #646e69;
   --color-rule: #d5d9d2;
 
   --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;

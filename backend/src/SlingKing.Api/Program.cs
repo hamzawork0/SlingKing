@@ -1,5 +1,8 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
+using SlingKing.Api.Controllers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -82,7 +85,52 @@ builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
     .AllowAnyHeader()
     .AllowAnyMethod()));
 
-builder.Services.AddControllers();
+// Guessing a password is the only unauthenticated thing worth doing to this API, so the
+// credential endpoints are the only ones that need a brake. Ten a minute per address is far
+// above what a person types and far below what a guesser needs; bcrypt at work factor 12 is
+// otherwise the only cost, and that is a CPU-exhaustion vector as much as a defence.
+var loginAttemptsPerMinute =
+    int.TryParse(Environment.GetEnvironmentVariable("SLINGKING_LOGIN_ATTEMPTS_PER_MINUTE"), out var attempts)
+        ? attempts
+        : 10;
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(AuthController.CredentialsRateLimitPolicy, http =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            // ponytail: partitions on the socket address. Behind a reverse proxy that is the
+            // proxy's IP and every visitor shares one bucket — add UseForwardedHeaders when
+            // this deploys behind one, or the limit becomes a self-inflicted outage.
+            http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = loginAttemptsPerMinute,
+                Window = TimeSpan.FromMinutes(1)
+            }));
+});
+
+builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
+{
+    // System.Text.Json names the target CLR type when a body will not bind
+    // ("could not be converted to SlingKing.Api.Contracts.Auth.LoginRequest"), which hands
+    // the client our internal namespace. Field-level messages are ours and are safe to keep;
+    // the deserialiser's are keyed by JSON path and get replaced wholesale.
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var errors = context.ModelState.ToDictionary(
+            entry => entry.Key,
+            entry => entry.Key.StartsWith('$')
+                ? ["The request body is not valid JSON."]
+                : entry.Value!.Errors.Select(error => error.ErrorMessage).ToArray());
+
+        return new BadRequestObjectResult(new ValidationProblemDetails(errors))
+        {
+            ContentTypes = { "application/problem+json" }
+        };
+    };
+});
+
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ProblemDetailsExceptionHandler>();
 
@@ -128,6 +176,7 @@ if (!app.Environment.IsProduction())
 }
 
 app.UseCors();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
