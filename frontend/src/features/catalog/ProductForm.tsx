@@ -82,14 +82,29 @@ export function ProductForm() {
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
-    save.mutate({
-      ...form,
-      variants: form.variants.map((v) => ({
-        ...v,
-        colour: v.colour?.trim() || null,
-        size: v.size?.trim() || null,
-      })),
-    });
+
+    const variants = form.variants.map((v) => ({
+      ...v,
+      colour: v.colour?.trim() || null,
+      size: v.size?.trim() || null,
+    }));
+
+    // Number("") is 0, so a price field cleared mid-edit reads as a real zero rather than as
+    // absent. Saving that would quietly reprice a bag to nothing, and the server cannot tell
+    // the difference — its check is that the field is present, not that it is sensible.
+    const priced = variants.filter((v) => v.isActive);
+
+    if (priced.some((v) => !Number.isFinite(v.sellingPrice) || v.sellingPrice <= 0)) {
+      setError("Every colour that is still active needs a price above zero.");
+      return;
+    }
+
+    if (variants.some((v) => !Number.isInteger(v.lowStockThreshold) || v.lowStockThreshold < 0)) {
+      setError("A low stock level cannot be negative.");
+      return;
+    }
+
+    save.mutate({ ...form, variants });
   }
 
   return (

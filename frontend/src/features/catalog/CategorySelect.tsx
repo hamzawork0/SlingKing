@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createCategory, listCategories } from "../../api/catalog";
+import { isNetworkError } from "../../api/client";
 
 /**
  * Categories get no screen of their own — the owner will create about five and then never
@@ -29,7 +30,12 @@ export function CategorySelect({
       setName("");
       setError(null);
     },
-    onError: () => setError("That category could not be added. It may already exist."),
+    onError: (err) =>
+      setError(
+        isNetworkError(err)
+          ? "Cannot reach the server. Check your connection and try again."
+          : "That category could not be added. It may already exist.",
+      ),
   });
 
   if (adding) {
