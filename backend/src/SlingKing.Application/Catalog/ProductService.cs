@@ -195,14 +195,16 @@ public sealed class ProductService : IProductService
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var term = $"%{search.Trim()}%";
+            var term = search.Trim().ToLower();
 
-            // ILike is Npgsql's case-insensitive LIKE and translates to SQL. ToLower() on
-            // both sides would work too but defeats any index we add later.
+            // Provider-agnostic on purpose. EF.Functions.ILike would drag the Npgsql provider
+            // package into Application, which otherwise has no database-provider dependency at
+            // all. Nothing is lost: a leading-wildcard match cannot use a plain btree index
+            // either way, and a pg_trgm index would serve lower(x) LIKE '%…%' just as well.
             query = query.Where(p =>
-                EF.Functions.ILike(p.Name, term) ||
-                EF.Functions.ILike(p.Code, term) ||
-                p.Variants.Any(v => EF.Functions.ILike(v.Sku, term)));
+                p.Name.ToLower().Contains(term) ||
+                p.Code.ToLower().Contains(term) ||
+                p.Variants.Any(v => v.Sku.ToLower().Contains(term)));
         }
 
         var ids = await query
