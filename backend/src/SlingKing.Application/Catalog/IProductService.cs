@@ -1,0 +1,40 @@
+namespace SlingKing.Application.Catalog;
+
+public interface IProductService
+{
+    /// <summary>Null when no product has that id.</summary>
+    Task<ProductView?> GetAsync(long id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Allocates the product code, derives a SKU per variant, and writes a zero-quantity
+    /// stock row per variant at the default location — all in one transaction. An empty
+    /// variant list yields one variant with no colour and no size.
+    /// </summary>
+    Task<ProductView> CreateAsync(ProductInput input, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Newest first. <paramref name="search"/> matches product name, product code and
+    /// variant SKU, case-insensitively. <paramref name="includeInactive"/> applies to
+    /// products only — variants always come back, each carrying its own IsActive.
+    /// </summary>
+    Task<IReadOnlyList<ProductView>> ListAsync(
+        string? search,
+        bool includeInactive,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Takes the whole product including its complete variant list, in one transaction. A row
+    /// with an id is updated in place; a row without one is created and takes the next
+    /// ordinal; IsActive false retires a row. A variant absent from the list is left
+    /// untouched — absence never means deletion.
+    /// </summary>
+    Task<ProductView> UpdateAsync(
+        long id, ProductInput input, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Marks the product inactive. Variant rows are deliberately untouched, so reactivating
+    /// restores exactly the states they had. Throws <see cref="CatalogException"/> with 404
+    /// if no product has that id. Nothing is ever deleted.
+    /// </summary>
+    Task DeactivateAsync(long id, CancellationToken cancellationToken = default);
+}

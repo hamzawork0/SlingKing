@@ -17,6 +17,8 @@ public class TestSchemaFixture : IAsyncLifetime
 
     public AppDbContext Db { get; private set; } = null!;
 
+    public string ConnectionString => _connectionString;
+
     private string _connectionString = null!;
 
     /// <summary>

@@ -62,6 +62,24 @@ export function isNetworkError(error: unknown): boolean {
   return axios.isAxiosError(error) && !error.response;
 }
 
+/**
+ * The API authors a readable sentence in ProblemDetails.title for every failure the caller
+ * caused. Showing our own generic text instead throws that away — and for some rejections the
+ * server's message carries the only instruction that resolves it.
+ */
+export function serverMessage(error: unknown, fallback: string): string {
+  if (isNetworkError(error)) {
+    return "Cannot reach the server. Check your connection and try again.";
+  }
+
+  if (axios.isAxiosError(error)) {
+    const title = (error.response?.data as { title?: unknown } | undefined)?.title;
+    if (typeof title === "string" && title.trim()) return title;
+  }
+
+  return fallback;
+}
+
 api.interceptors.request.use((config) => {
   const tokens = tokenStore.get();
   if (tokens) {
