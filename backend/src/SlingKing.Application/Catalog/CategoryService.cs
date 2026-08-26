@@ -50,4 +50,30 @@ public sealed class CategoryService : ICategoryService
 
         return new CategoryOption(category.Id, category.Name);
     }
+
+    public async Task<CategoryOption> RenameAsync(
+        int id, string name, CancellationToken cancellationToken = default)
+    {
+        var category = await _db.Categories
+            .SingleOrDefaultAsync(c => c.Id == id, cancellationToken)
+            ?? throw CatalogException.NotFound("That category does not exist.");
+
+        var trimmed = name.Trim();
+
+        // c.Id != id is load-bearing. Correcting capitalisation is the likeliest reason to
+        // rename a category at all, and without excluding the row being renamed it collides
+        // with its own existing name and is refused.
+        var taken = await _db.Categories
+            .AnyAsync(c => c.Id != id && c.Name.ToLower() == trimmed.ToLower(), cancellationToken);
+
+        if (taken)
+        {
+            throw CatalogException.Conflict($"A category named \"{trimmed}\" already exists.");
+        }
+
+        category.Name = trimmed;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return new CategoryOption(category.Id, category.Name);
+    }
 }

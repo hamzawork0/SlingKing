@@ -7,6 +7,9 @@ namespace SlingKing.Api.Contracts.Catalog;
 public record CreateCategoryRequest(
     [Required, MinLength(1), MaxLength(128)] string Name);
 
+public record RenameCategoryRequest(
+    [Required, MinLength(1), MaxLength(128)] string Name);
+
 public record VariantRequest(
     long? Id,
     [MaxLength(64)] string? Colour,

@@ -36,4 +36,22 @@ public class CategoriesController : ControllerBase
 
         return CreatedAtAction(nameof(List), new { id = created.Id }, created);
     }
+
+    [HttpPut("{id:int}")]
+    [ProducesResponseType(typeof(CategoryOption), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Rename(
+        int id, RenameCategoryRequest request, CancellationToken cancellationToken)
+    {
+        // As with Create: MinLength(1) accepts "   ", which would blank the name.
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            ModelState.AddModelError(nameof(request.Name), "The Name field is required.");
+            return ValidationProblem(ModelState);
+        }
+
+        return Ok(await _categories.RenameAsync(id, request.Name, cancellationToken));
+    }
 }

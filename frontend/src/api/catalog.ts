@@ -75,6 +75,11 @@ export async function createCategory(name: string): Promise<CategoryOption> {
   return data;
 }
 
+export async function renameCategory(id: number, name: string): Promise<CategoryOption> {
+  const { data } = await api.put<CategoryOption>(`/api/v1/categories/${id}`, { name });
+  return data;
+}
+
 export async function listProducts(
   search: string,
   includeInactive: boolean,

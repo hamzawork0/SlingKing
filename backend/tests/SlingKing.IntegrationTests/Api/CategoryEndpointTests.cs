@@ -95,6 +95,93 @@ public class CategoryEndpointTests : IClassFixture<SlingKingApiFactory>, IAsyncL
         body.ShouldNotContain("   at ");
     }
 
+    private record RenameCategoryRequest(string Name);
+
+    [Fact]
+    public async Task Renaming_changes_the_name_in_the_list()
+    {
+        var created = await _client.PostAsJsonAsync(
+            "/api/v1/categories", new CreateCategoryRequest(UniqueName()));
+        var option = await created.Content.ReadFromJsonAsync<CategoryOption>();
+
+        var corrected = UniqueName();
+        var response = await _client.PutAsJsonAsync(
+            $"/api/v1/categories/{option!.Id}", new RenameCategoryRequest(corrected));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadFromJsonAsync<CategoryOption>())!.Name.ShouldBe(corrected);
+
+        var list = await _client.GetFromJsonAsync<List<CategoryOption>>("/api/v1/categories");
+        list!.ShouldContain(c => c.Id == option.Id && c.Name == corrected);
+    }
+
+    /// <summary>
+    /// The duplicate check must exclude the row being renamed. Without that, correcting a
+    /// category's capitalisation — the most likely reason to rename one at all — collides
+    /// with itself and is refused.
+    /// </summary>
+    [Fact]
+    public async Task A_category_can_be_recapitalised_without_clashing_with_itself()
+    {
+        var name = UniqueName().ToLowerInvariant();
+        var created = await _client.PostAsJsonAsync(
+            "/api/v1/categories", new CreateCategoryRequest(name));
+        var option = await created.Content.ReadFromJsonAsync<CategoryOption>();
+
+        var response = await _client.PutAsJsonAsync(
+            $"/api/v1/categories/{option!.Id}", new RenameCategoryRequest(name.ToUpperInvariant()));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadFromJsonAsync<CategoryOption>())!
+            .Name.ShouldBe(name.ToUpperInvariant());
+    }
+
+    [Fact]
+    public async Task Renaming_onto_another_categorys_name_is_a_conflict()
+    {
+        var first = UniqueName();
+        var second = UniqueName();
+
+        await _client.PostAsJsonAsync("/api/v1/categories", new CreateCategoryRequest(first));
+        var other = await _client.PostAsJsonAsync(
+            "/api/v1/categories", new CreateCategoryRequest(second));
+        var option = await other.Content.ReadFromJsonAsync<CategoryOption>();
+
+        var response = await _client.PutAsJsonAsync(
+            $"/api/v1/categories/{option!.Id}", new RenameCategoryRequest(first));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("already exists");
+    }
+
+    [Fact]
+    public async Task Renaming_an_unknown_category_is_not_found()
+    {
+        var response = await _client.PutAsJsonAsync(
+            "/api/v1/categories/999999", new RenameCategoryRequest("Ghost"));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // Status alone does not discriminate: an absent route is also a 404. Only the
+        // service's own rejection carries a problem document with our authored message,
+        // so without these the test would pass with the endpoint never written.
+        response.Content.Headers.ContentType!.MediaType.ShouldBe("application/problem+json");
+        (await response.Content.ReadAsStringAsync()).ShouldContain("does not exist");
+    }
+
+    [Fact]
+    public async Task Renaming_to_a_blank_name_is_rejected_as_validation()
+    {
+        var created = await _client.PostAsJsonAsync(
+            "/api/v1/categories", new CreateCategoryRequest(UniqueName()));
+        var option = await created.Content.ReadFromJsonAsync<CategoryOption>();
+
+        var response = await _client.PutAsJsonAsync(
+            $"/api/v1/categories/{option!.Id}", new RenameCategoryRequest("   "));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
     [Fact]
     public async Task A_blank_name_is_rejected_as_validation()
     {
