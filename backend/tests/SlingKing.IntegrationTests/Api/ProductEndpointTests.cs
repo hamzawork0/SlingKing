@@ -95,6 +95,26 @@ public class ProductEndpointTests : IClassFixture<SlingKingApiFactory>, IAsyncLi
     }
 
     /// <summary>
+    /// Create must honour isActive exactly as update does. It used to hardcode true, so a row
+    /// the owner had unticked was created active — and because the duplicate guard skips
+    /// inactive rows, an unticked duplicate slipped past it and died on the database index.
+    /// </summary>
+    [Fact]
+    public async Task Creating_a_variant_marked_inactive_stores_it_inactive()
+    {
+        var product = await CreateAsync(new ProductPayload(
+            "Born Retired", null, null,
+            [
+                new VariantPayload(null, "Tan", null, 1850m, 2, true),
+                new VariantPayload(null, "Black", null, 1850m, 2, false)
+            ]));
+
+        product.Variants.Count.ShouldBe(2);
+        product.Variants.Single(v => v.Colour == "Tan").IsActive.ShouldBeTrue();
+        product.Variants.Single(v => v.Colour == "Black").IsActive.ShouldBeFalse();
+    }
+
+    /// <summary>
     /// The allocator's gap-free behaviour under concurrency is already proven by
     /// NumberSequenceTests with 20 concurrent callers. What is unproven here is only that
     /// ProductService is wired to the allocator at all, which two sequential creates settle.

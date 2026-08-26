@@ -144,39 +144,57 @@ public sealed class ProductService : IProductService
             UpdatedAt = now
         };
 
-        _db.Products.Add(product);
-        await _db.SaveChangesAsync(cancellationToken);
-
-        var variants = requested.Select((variant, index) => new ProductVariant
+        try
         {
-            ProductId = product.Id,
-            Sku = $"{code}-V{index + 1:00}",
-            Colour = Normalise(variant.Colour),
-            Size = Normalise(variant.Size),
-            SellingPrice = variant.SellingPrice,
-            LowStockThreshold = variant.LowStockThreshold,
-            IsActive = true,
-            CreatedAt = now,
-            UpdatedAt = now
-        }).ToList();
+            _db.Products.Add(product);
+            await _db.SaveChangesAsync(cancellationToken);
 
-        _db.ProductVariants.AddRange(variants);
-        await _db.SaveChangesAsync(cancellationToken);
-
-        foreach (var variant in variants)
-        {
-            _db.StockLevels.Add(new StockLevel
+            var variants = requested.Select((variant, index) => new ProductVariant
             {
-                VariantId = variant.Id,
-                LocationId = defaultLocationId,
-                PhysicalQty = 0,
-                ReservedQty = 0,
+                ProductId = product.Id,
+                Sku = $"{code}-V{index + 1:00}",
+                Colour = Normalise(variant.Colour),
+                Size = Normalise(variant.Size),
+                SellingPrice = variant.SellingPrice,
+                LowStockThreshold = variant.LowStockThreshold,
+                IsActive = variant.IsActive,
+                CreatedAt = now,
                 UpdatedAt = now
-            });
-        }
+            }).ToList();
 
-        await _db.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+            _db.ProductVariants.AddRange(variants);
+            await _db.SaveChangesAsync(cancellationToken);
+
+            foreach (var variant in variants)
+            {
+                _db.StockLevels.Add(new StockLevel
+                {
+                    VariantId = variant.Id,
+                    LocationId = defaultLocationId,
+                    PhysicalQty = 0,
+                    ReservedQty = 0,
+                    UpdatedAt = now
+                });
+            }
+
+            await _db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateException dbFailure)
+            when (dbFailure.InnerException?.Message.Contains("ux_variant_combination") == true)
+        {
+            // ux_variant_combination is a partial unique index, so Postgres enforces it per
+            // row as the batch lands rather than at commit. RejectDuplicateCombinations above
+            // only proves the requested state is clean in memory; a concurrent create can still
+            // lose the race at the database. The filter is a string match on the constraint
+            // name rather than a PostgresException/SqlState check because Application must stay
+            // free of any database-provider package — it references only
+            // Microsoft.EntityFrameworkCore.Relational plus Domain.
+            throw CatalogException.Conflict(
+                "That change would give two active variants the same colour and size. " +
+                "If you are swapping colours between variants, save the change in two steps.",
+                dbFailure);
+        }
 
         return (await GetAsync(product.Id, cancellationToken))!;
     }
@@ -360,11 +378,16 @@ public sealed class ProductService : IProductService
             await transaction.CommitAsync(cancellationToken);
         }
         catch (DbUpdateException dbFailure)
+            when (dbFailure.InnerException?.Message.Contains("ux_variant_combination") == true)
         {
             // ux_variant_combination is a partial unique index, so Postgres enforces it per
             // row as the batch lands rather than at commit. Two active variants swapping
             // colours in a single save therefore cannot be ordered to succeed — the honest
-            // answer is to say so, not to return a generic 500.
+            // answer is to say so, not to return a generic 500. The filter is a string match on
+            // the constraint name rather than a PostgresException/SqlState check because
+            // Application must stay free of any database-provider package — it references only
+            // Microsoft.EntityFrameworkCore.Relational plus Domain. Anything else propagates to
+            // become a logged 500 instead of being mislabelled as a duplicate colour.
             throw CatalogException.Conflict(
                 "That change would give two active variants the same colour and size. " +
                 "If you are swapping colours between variants, save the change in two steps.",

@@ -2,6 +2,7 @@ import { Fragment, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { deactivateProduct, listProducts, type ProductView } from "../../api/catalog";
+import { serverMessage } from "../../api/client";
 import { formatInr } from "../../lib/money";
 
 function VariantRow({ variant }: { variant: ProductView["variants"][number] }) {
@@ -23,6 +24,7 @@ export function ProductsPage() {
   const [search, setSearch] = useState("");
   const [includeInactive, setIncludeInactive] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const products = useQuery({
@@ -32,7 +34,11 @@ export function ProductsPage() {
 
   const retire = useMutation({
     mutationFn: deactivateProduct,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["products"] }),
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (err) => setError(serverMessage(err, "That product could not be retired.")),
   });
 
   return (
@@ -78,6 +84,12 @@ export function ProductsPage() {
       {products.isError && (
         <p role="alert" className="mt-8 text-[13px] text-flag">
           Could not load products. Check that the API is running and try again.
+        </p>
+      )}
+
+      {error && (
+        <p role="alert" className="mt-4 text-[13px] text-flag">
+          {error}
         </p>
       )}
 
@@ -152,7 +164,15 @@ export function ProductsPage() {
                       {product.isActive && (
                         <button
                           type="button"
-                          onClick={() => retire.mutate(product.id)}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Retire "${product.name}"? It stays in the database and reappears under "Show retired", but it will be hidden from this list.`,
+                              )
+                            ) {
+                              retire.mutate(product.id);
+                            }
+                          }}
                           className="ml-4 text-[13px] text-muted transition-colors hover:text-flag"
                         >
                           Retire

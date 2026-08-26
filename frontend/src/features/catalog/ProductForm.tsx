@@ -9,7 +9,7 @@ import {
   type ProductPayload,
   type VariantPayload,
 } from "../../api/catalog";
-import { isNetworkError } from "../../api/client";
+import { serverMessage } from "../../api/client";
 import { CategorySelect } from "./CategorySelect";
 
 const blankVariant: VariantPayload = {
@@ -66,9 +66,10 @@ export function ProductForm() {
     },
     onError: (err) =>
       setError(
-        isNetworkError(err)
-          ? "Cannot reach the server. Check your connection and try again."
-          : "That could not be saved. Check that each colour and size appears only once.",
+        serverMessage(
+          err,
+          "That could not be saved. Check that each colour and size appears only once.",
+        ),
       ),
   });
 
@@ -105,6 +106,28 @@ export function ProductForm() {
     }
 
     save.mutate({ ...form, variants });
+  }
+
+  if (productId !== null && existing.isPending) {
+    return <p className="mx-auto max-w-3xl px-6 py-10 text-[13px] text-muted">Loading</p>;
+  }
+
+  if (productId !== null && existing.isError) {
+    return (
+      <div className="mx-auto max-w-3xl px-6 py-10">
+        <p role="alert" className="text-[13px] text-flag">
+          That product could not be loaded. It may have been removed, or the server may be
+          unreachable.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate("/products")}
+          className="mt-4 text-[14px] text-saddle"
+        >
+          Back to products
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -164,6 +187,7 @@ export function ProductForm() {
               <th className="pb-2 font-medium">Price</th>
               <th className="pb-2 font-medium">Low at</th>
               <th className="pb-2 font-medium">Active</th>
+              <th className="pb-2" />
             </tr>
           </thead>
           <tbody>
@@ -220,6 +244,23 @@ export function ProductForm() {
                     checked={variant.isActive}
                     onChange={(e) => patchVariant(index, { isActive: e.target.checked })}
                   />
+                </td>
+                <td className="py-2 text-right">
+                  {variant.id === null && form.variants.length > 1 && (
+                    <button
+                      type="button"
+                      aria-label={`Remove row ${index + 1}`}
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          variants: form.variants.filter((_, i) => i !== index),
+                        })
+                      }
+                      className="text-[13px] text-muted transition-colors hover:text-flag"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
