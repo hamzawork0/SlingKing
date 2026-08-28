@@ -193,18 +193,25 @@ export function ProductForm() {
           <tbody>
             {form.variants.map((variant, index) => (
               <tr key={variant.id ?? `new-${index}`} className="border-b border-rule">
-                <td className="py-2 pr-2">
+                <td className="py-2 pr-2 align-top">
                   <input
                     aria-label={`Colour ${index + 1}`}
                     value={variant.colour ?? ""}
                     onChange={(e) => patchVariant(index, { colour: e.target.value })}
                     className="w-full rounded-stamp border border-rule px-2 py-1.5 text-[14px]"
                   />
+                  {/* Hangs below the input rather than beside it. The cell is align-top so
+                      this extra line cannot push the input out of line with its neighbours —
+                      which is what happened while every cell was vertically centred: the SKU
+                      made this cell taller, and only a SAVED variant has one, so the row
+                      skewed the moment a product was edited rather than created. */}
                   {variant.id !== null && skus[variant.id] && (
-                    <span className="num text-[11px] text-muted">{skus[variant.id]}</span>
+                    <span className="num mt-1 block text-[11px] text-muted">
+                      {skus[variant.id]}
+                    </span>
                   )}
                 </td>
-                <td className="py-2 pr-2">
+                <td className="py-2 pr-2 align-top">
                   <input
                     aria-label={`Size ${index + 1}`}
                     value={variant.size ?? ""}
@@ -212,7 +219,7 @@ export function ProductForm() {
                     className="w-full rounded-stamp border border-rule px-2 py-1.5 text-[14px]"
                   />
                 </td>
-                <td className="py-2 pr-2">
+                <td className="py-2 pr-2 align-top">
                   <input
                     type="number"
                     min={0}
@@ -225,7 +232,7 @@ export function ProductForm() {
                     className="num w-28 rounded-stamp border border-rule px-2 py-1.5 text-[14px]"
                   />
                 </td>
-                <td className="py-2 pr-2">
+                <td className="py-2 pr-2 align-top">
                   <input
                     type="number"
                     min={0}
@@ -237,7 +244,9 @@ export function ProductForm() {
                     className="num w-20 rounded-stamp border border-rule px-2 py-1.5 text-[14px]"
                   />
                 </td>
-                <td className="py-2">
+                {/* Padded to meet the inputs' centre line, since align-top would otherwise
+                    pin a 13px checkbox to the top of a 36px row. */}
+                <td className="py-2 pt-4 align-top">
                   <input
                     type="checkbox"
                     aria-label={`Active ${index + 1}`}
@@ -245,7 +254,7 @@ export function ProductForm() {
                     onChange={(e) => patchVariant(index, { isActive: e.target.checked })}
                   />
                 </td>
-                <td className="py-2 text-right">
+                <td className="py-2 pt-3.5 text-right align-top">
                   {variant.id === null && form.variants.length > 1 && (
                     <button
                       type="button"
