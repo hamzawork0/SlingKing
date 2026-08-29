@@ -67,20 +67,30 @@ Facts settled by reading the schema rather than by asking:
 
 ### Movement types in scope
 
-Five of the ten `InventoryTransactionType` values:
+**Four postable types, each with exactly one direction.**
 
 | Type | Direction | Cost effect |
 |---|---|---|
 | `OpeningStock` | in | Creates a layer, `CostLayerSourceType.OpeningStock` |
-| `Adjustment` | either | In: creates a layer, `AdjustmentIn`. Out: consumes. |
 | `Damage` | out | Consumes |
 | `Loss` | out | Consumes |
 | `PersonalUse` | out | Consumes |
 
+`Adjustment` is a fifth type the ledger records, but **it cannot be posted.**
+It is produced only by the recount endpoint, in whichever direction the count
+implies. Offering it directly as well would mean offering two ways to change a
+quantity — one where you say what you counted and the server does the
+arithmetic under a lock, and one where you compute `+3` yourself from a number
+your screen loaded a minute ago. The second is exactly the mistake the recount
+endpoint exists to prevent, so it is not built.
+
+The payoff runs through the whole design: every postable type has a fixed
+direction, so there is no "either" branch, no direction inference, and
+`OpeningStock` is the only type that carries a cost.
+
 `Purchase` is M3; `Sale`, `Return`, `Reservation` and `ReservationRelease` are
-R2. Posting any of them through this API is a 400 — the endpoint accepts the
-five above and refuses the rest by name rather than silently accepting a type
-it has no cost path for.
+R2. Posting any of those — or `Adjustment` — is a 400, refused by name rather
+than silently accepted by an endpoint with no cost path for it.
 
 ## Architecture
 
@@ -154,13 +164,11 @@ exemption below, which is what makes the advice honest rather than circular.
 
 `RecountAsync(variantId, countedQuantity)` reads the current quantity **inside
 the same transaction, after taking the lock**, computes the difference, and
-records an `Adjustment` through the same path as any other movement. A
-difference of zero records nothing and says so.
+writes an `Adjustment` down the same internal path as any other movement —
+the same lock, the same ledger append, the same cost delegation. It is the
+only producer of that type, which is why the type is not postable.
 
-It is a separate endpoint rather than a client-computed `Adjustment` precisely
-so the current quantity is read under the lock. A client computing the delta
-from a number its page loaded thirty seconds ago posts a wrong adjustment
-whenever anything happened in between.
+A difference of zero records nothing and says so.
 
 **Recount is the one path exempt from "refuse loudly".** Every other outflow
 throws when layers run short. A recount does not: it consumes oldest-first,
@@ -205,14 +213,15 @@ historical row.**
 ### Movement request
 
 ```
-{ variantId, type, quantity, unitCost?, reason?, notes? }
+{ variantId, type, quantity, unitCost?, reason? }
 ```
 
 - `quantity` is always positive. Direction comes from `type`.
-- `unitCost` is accepted only on `OpeningStock` and an inflow `Adjustment`,
-  and is **optional** — omitted means genuinely unknown.
+- `unitCost` is accepted only on `OpeningStock`, the one inflow, and is
+  **optional** — omitted means genuinely unknown.
 - `reason` is required for `Damage`, `Loss` and `PersonalUse`. Those are the
-  movements read back months later.
+  movements read back months later. It is the only free-text field: a second
+  optional `notes` box beside it is one nobody fills, on a form this small.
 
 ### Semantics fixed here so they cannot be read two ways
 
@@ -223,10 +232,11 @@ historical row.**
   variants whose threshold is 0.
 - **Outflows check `physical_qty`, not `available_qty`.** `reserved_qty` is
   always 0 in M2b; the distinction becomes real in R2 and the check moves then.
-- **`unitCost` on an outflow is a 400, not a silent ignore.** A caller sending
-  it believes it is setting a price it is not setting.
-- **Stock value on the list sums open layers**, and is null — rendered as `—`,
-  not `₹0.00` — when any open layer has an unknown cost.
+- **The list carries no money.** It reads `stock_levels` and `product_variants`
+  and nothing else. A value column would make every list render touch the cost
+  layers for a figure the item page already shows. If a total worth is wanted
+  later it belongs at the top of the list as one figure — one query, not one
+  per row.
 
 ### Errors
 
@@ -234,8 +244,8 @@ historical row.**
 |---|---|---|
 | 400 | Quantity ≤ 0 | Enter how many, as a number above zero. |
 | 400 | Reason missing on Damage/Loss/Personal use | Say briefly what happened, so this makes sense later. |
-| 400 | Type not one of the five | That kind of movement cannot be recorded here yet. |
-| 400 | `unitCost` sent on an outflow | A cost cannot be set on stock going out. |
+| 400 | Type not one of the four postable ones | That kind of movement cannot be recorded here yet. |
+| 400 | `unitCost` sent on anything but `OpeningStock` | A cost can only be set on stock coming in. |
 | 404 | Unknown or inactive variant | That item no longer exists. |
 | 409 | Outflow larger than stock | Only 3 in stock. Record a recount first if that is wrong. |
 | 409 | Cost layers short of stock | Stock and cost records disagree for this item — run a recount to correct it. |
@@ -246,21 +256,22 @@ that need the database sit in `StockService` and surface as `AppException`.
 ## Frontend
 
 **Inventory** (`/inventory`) — one row per active variant: item (product name,
-colour/size beneath), SKU, in stock, low at, value. Search box; **Low stock
-only** toggle. Low rows carry `--color-flag`, the one place on the screen that
-earns colour. Empty-ish state: *"Nothing counted yet. Open an item and record
-its opening stock."*
+colour/size beneath), SKU, in stock, low at. Search box; **Low stock only**
+toggle. Low rows carry `--color-flag`, the one place on the screen that earns
+colour. Empty-ish state: *"Nothing counted yet. Open an item and record its
+opening stock."*
 
 **Item** (`/inventory/:variantId`) — current quantity large at the top, then
 movement history newest-first: date, what happened, the change, the running
-total, the reason. Cost below: open layers and what the stock is worth.
-History is the body of the page, not a footer, because this page is the answer
-to "where did those four go?".
+total, the reason. Below it, one figure: what this stock is worth, or `—` if
+any of it has an unknown cost. Not a per-layer breakdown — the FIFO queue is
+machinery, and its internals are accountant UI for a one-person bag business.
+History is the body of the page, because this page is the answer to "where did
+those four go?".
 
 Two controls, deliberately not one:
 
-- **Record a movement** — type, quantity, reason, notes. Quantity is what
-  *changed*.
+- **Record a movement** — type, quantity, reason. Quantity is what *changed*.
 - **Recount** — one field. Quantity is what you *counted*. Shows the
   arithmetic before committing: *"Counted 9, system says 12 — this records a
   loss of 3."* You confirm the sentence, not the number.
@@ -308,7 +319,9 @@ Test-first, matching M2a.
 - Recount up creates a layer; recount down consumes; recount to the same
   number records nothing
 - A missing reason on Damage is a 400
-- A `Purchase` type is a 400
+- A `Purchase` type is a 400, and so is `Adjustment` — the recount endpoint is
+  the only way to produce one
+- `unitCost` on a `Damage` is a 400
 - With layers deliberately short of `physical_qty`: an ordinary outflow is
   refused with the disagreement sentence, and a recount over the same
   shortfall **succeeds** — the exemption, proven both ways in one test
@@ -341,30 +354,21 @@ session is trusted.
 
 ## Gate
 
-Each step passes or it does not.
+The tests above are the gate. Restating them here as a numbered list would be
+the same assertions with different punctuation, and two copies of a checklist
+drift. What is left is the part no test covers:
 
-1. Opening stock of 10 at ₹120 → `physical_qty = 10`, one layer with
-   `remaining_qty = 10`
-2. Damage of 4 → `physical_qty = 6`, layer `remaining_qty = 6`, ledger row
-   carries `total_cost = 480.00`
-3. Opening stock with no cost, then an outflow crossing both layers →
-   `total_cost` is **null**, not partial
-4. Outflow of 99 against 6 → 409, and the ledger row count is unchanged
-5. Recount to 9 against 6 → one `Adjustment` of +3 and a new layer whose
-   `unit_cost` is **null**; recount to 9 again → nothing written
-6. The concurrency test fails with the row lock removed and passes with it
-7. Both invariants hold after the reconciliation script
-8. `NoDeleteRoutesTests` still passes — the application routes no DELETE
-   endpoint at all. Separately, a ledger row's columns are unchanged after
-   three further movements, which is what actually proves append-only.
-9. Migrations apply to an empty schema; the table count is still 28
-10. Full suite green, zero warnings under `TreatWarningsAsErrors`, `tsc -b`
-    clean
-11. Browser: record opening stock, record a damage with a reason, run a
-    recount, read the history back — all against the real API
-12. A whole-branch review before merge. M2a's found a Critical that six
-    per-task reviews structurally could not, and this milestone has more seams
-    than that one did.
+1. Full suite green, zero warnings under `TreatWarningsAsErrors`, `tsc -b`
+   clean
+2. Migrations apply to an empty schema; the table count is still 28
+3. The concurrency test has been **seen to fail** with the row lock removed,
+   not merely seen to pass with it
+4. Browser: record opening stock, record a damage with a reason, run a
+   recount, read the history back — all against the real API, after a stub
+   probe
+5. A whole-branch review before merge. M2a's found a Critical that six
+   per-task reviews structurally could not, and this milestone has more seams
+   than that one did.
 
 ## Out of scope
 
