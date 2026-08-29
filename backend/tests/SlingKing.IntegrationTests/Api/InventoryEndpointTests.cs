@@ -204,4 +204,190 @@ public class InventoryEndpointTests : IClassFixture<SlingKingApiFactory>, IAsync
             response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, $"type {type}");
         }
     }
+
+    /// <summary>Opening stock straight in, so a test can set up a starting position.</summary>
+    private async Task OpenAsync(long variantId, int quantity, decimal? unitCost)
+    {
+        var response = await _client.PostAsJsonAsync("/api/v1/inventory/movements",
+            new MovementRequest(variantId, "OpeningStock", quantity, unitCost, null));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+    }
+
+    [Fact]
+    public async Task Damage_lowers_the_level_and_consumes_the_oldest_layer_first()
+    {
+        var variantId = await NewVariantAsync();
+        await OpenAsync(variantId, 3, 100m);
+        await OpenAsync(variantId, 5, 200m);
+
+        var response = await _client.PostAsJsonAsync("/api/v1/inventory/movements",
+            new MovementRequest(variantId, "Damage", 5, null, "Water damaged in transit"));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        var movement = await response.Content.ReadFromJsonAsync<MovementView>();
+        movement!.PhysicalDelta.ShouldBe(-5);
+
+        // 3 at 100 then 2 at 200. A last-in-first-out walk would say 1000.
+        movement.TotalCost.ShouldBe(700m);
+
+        var level = await QueryAsync(db => db.StockLevels
+            .SingleAsync(s => s.VariantId == variantId));
+        level.PhysicalQty.ShouldBe(3);
+
+        var layers = await QueryAsync(db => db.InventoryCostLayers
+            .Where(l => l.VariantId == variantId)
+            .OrderBy(l => l.ReceivedAt).ThenBy(l => l.Id)
+            .ToListAsync());
+
+        layers.Select(l => l.RemainingQty).ShouldBe([0, 3]);
+
+        var consumptions = await QueryAsync(db => db.InventoryCostConsumptions
+            .Where(c => c.InventoryTransactionId == movement.Id)
+            .OrderBy(c => c.Id)
+            .ToListAsync());
+
+        consumptions.Select(c => c.Quantity).ShouldBe([3, 2]);
+        consumptions.Select(c => c.UnitCost).ShouldBe([100m, 200m]);
+
+        // Copied at consumption time, never joined from the layer, so repricing later
+        // cannot rewrite what this outflow cost.
+        consumptions.Select(c => c.TotalCost).ShouldBe([300m, 400m]);
+    }
+
+    [Fact]
+    public async Task An_outflow_crossing_a_layer_of_unknown_cost_reports_no_total()
+    {
+        var variantId = await NewVariantAsync();
+        await OpenAsync(variantId, 3, null);
+        await OpenAsync(variantId, 5, 200m);
+
+        var response = await _client.PostAsJsonAsync("/api/v1/inventory/movements",
+            new MovementRequest(variantId, "Loss", 5, null, "Left in a rickshaw"));
+
+        var movement = await response.Content.ReadFromJsonAsync<MovementView>();
+
+        // 400.00 is the partial sum of the half we know about. Reporting it would
+        // understate the cost by whatever the first three actually cost.
+        movement!.TotalCost.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task An_outflow_larger_than_the_stock_is_refused_and_writes_nothing()
+    {
+        var variantId = await NewVariantAsync();
+        await OpenAsync(variantId, 6, 100m);
+
+        var before = await QueryAsync(db => db.InventoryTransactions
+            .CountAsync(t => t.VariantId == variantId));
+
+        var response = await _client.PostAsJsonAsync("/api/v1/inventory/movements",
+            new MovementRequest(variantId, "Damage", 99, null, "Fire"));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        var problem = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+        problem!["title"].ToString()
+            .ShouldBe("Only 6 in stock. Record a recount first if that is wrong.");
+
+        var after = await QueryAsync(db => db.InventoryTransactions
+            .CountAsync(t => t.VariantId == variantId));
+        after.ShouldBe(before);
+
+        var level = await QueryAsync(db => db.StockLevels
+            .SingleAsync(s => s.VariantId == variantId));
+        level.PhysicalQty.ShouldBe(6);
+    }
+
+    [Fact]
+    public async Task An_outflow_without_a_reason_is_refused()
+    {
+        var variantId = await NewVariantAsync();
+        await OpenAsync(variantId, 6, 100m);
+
+        foreach (var reason in new string?[] { null, "", "   " })
+        {
+            var response = await _client.PostAsJsonAsync("/api/v1/inventory/movements",
+                new MovementRequest(variantId, "PersonalUse", 1, null, reason));
+
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, $"reason {reason ?? "null"}");
+        }
+    }
+
+    [Fact]
+    public async Task A_cost_may_not_be_attached_to_an_outflow()
+    {
+        var variantId = await NewVariantAsync();
+        await OpenAsync(variantId, 6, 100m);
+
+        var response = await _client.PostAsJsonAsync("/api/v1/inventory/movements",
+            new MovementRequest(variantId, "Damage", 1, 50m, "Torn strap"));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        var problem = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+        problem!["title"].ToString().ShouldBe("A cost can only be set on stock coming in.");
+    }
+
+    [Fact]
+    public async Task A_ledger_row_never_changes_once_written()
+    {
+        var variantId = await NewVariantAsync();
+        await OpenAsync(variantId, 10, 120m);
+
+        var original = await QueryAsync(db => db.InventoryTransactions
+            .AsNoTracking()
+            .Where(t => t.VariantId == variantId)
+            .OrderBy(t => t.Id)
+            .FirstAsync());
+
+        await _client.PostAsJsonAsync("/api/v1/inventory/movements",
+            new MovementRequest(variantId, "Damage", 2, null, "Scuffed"));
+        await _client.PostAsJsonAsync("/api/v1/inventory/movements",
+            new MovementRequest(variantId, "Loss", 1, null, "Miscounted at the courier"));
+        await _client.PostAsJsonAsync("/api/v1/inventory/movements",
+            new MovementRequest(variantId, "PersonalUse", 1, null, "Gifted to my sister"));
+
+        var reread = await QueryAsync(db => db.InventoryTransactions
+            .AsNoTracking()
+            .SingleAsync(t => t.Id == original.Id));
+
+        // Route enumeration cannot prove this: a POST updates a row as easily as a PUT does.
+        // Observation is the only proof that the ledger is genuinely append-only.
+        reread.PhysicalDelta.ShouldBe(original.PhysicalDelta);
+        reread.ReservedDelta.ShouldBe(original.ReservedDelta);
+        reread.UnitCost.ShouldBe(original.UnitCost);
+        reread.TotalCost.ShouldBe(original.TotalCost);
+        reread.Type.ShouldBe(original.Type);
+        reread.Reason.ShouldBe(original.Reason);
+        reread.OccurredAt.ShouldBe(original.OccurredAt);
+    }
+
+    [Fact]
+    public async Task The_ledger_and_the_stock_level_agree_after_a_run_of_movements()
+    {
+        var variantId = await NewVariantAsync();
+        await OpenAsync(variantId, 10, 120m);
+
+        await _client.PostAsJsonAsync("/api/v1/inventory/movements",
+            new MovementRequest(variantId, "Damage", 4, null, "Water damaged in transit"));
+        await _client.PostAsJsonAsync("/api/v1/inventory/movements",
+            new MovementRequest(variantId, "PersonalUse", 1, null, "Gifted to my sister"));
+
+        var summed = await QueryAsync(db => db.InventoryTransactions
+            .Where(t => t.VariantId == variantId)
+            .SumAsync(t => t.PhysicalDelta));
+
+        var level = await QueryAsync(db => db.StockLevels
+            .SingleAsync(s => s.VariantId == variantId));
+
+        summed.ShouldBe(level.PhysicalQty);
+
+        var openLayers = await QueryAsync(db => db.InventoryCostLayers
+            .Where(l => l.VariantId == variantId && l.RemainingQty > 0)
+            .SumAsync(l => l.RemainingQty));
+
+        openLayers.ShouldBe(level.PhysicalQty);
+    }
 }

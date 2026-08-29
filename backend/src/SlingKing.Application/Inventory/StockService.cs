@@ -99,40 +99,126 @@ public sealed class StockService : IStockService
 
         var level = await LockLevelAsync(input.VariantId, locationId, cancellationToken);
 
+        if (direction < 0 && level.PhysicalQty < input.Quantity)
+        {
+            throw AppException.Conflict(
+                $"Only {level.PhysicalQty} in stock. Record a recount first if that is wrong.");
+        }
+
+        var movement = await AppendAsync(
+            level, input.Type, direction * input.Quantity, input.UnitCost, input.Reason,
+            allowShortfall: false, cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return movement;
+    }
+
+    /// <summary>
+    /// One ledger row, one level update, and the matching cost movement. Assumes the caller
+    /// holds the lock on <paramref name="level"/> and has an open transaction — it commits
+    /// nothing itself, so a recount can compute its delta and append inside the same one.
+    /// </summary>
+    /// <param name="signedQuantity">Positive for stock coming in, negative for stock going out.</param>
+    private async Task<MovementView> AppendAsync(
+        StockLevel level,
+        InventoryTransactionType type,
+        int signedQuantity,
+        decimal? unitCost,
+        string? reason,
+        bool allowShortfall,
+        CancellationToken cancellationToken)
+    {
+        var now = _clock.UtcNow;
+
         var ledgerRow = new InventoryTransaction
         {
-            VariantId = input.VariantId,
-            LocationId = locationId,
-            Type = input.Type,
-            PhysicalDelta = direction * input.Quantity,
+            VariantId = level.VariantId,
+            LocationId = level.LocationId,
+            Type = type,
+            PhysicalDelta = signedQuantity,
             ReservedDelta = 0,
-            UnitCost = input.UnitCost,
-            TotalCost = input.UnitCost * input.Quantity,
-            Reason = input.Reason?.Trim(),
+            UnitCost = unitCost,
+            TotalCost = unitCost * Math.Abs(signedQuantity),
+            Reason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(),
             OccurredAt = now,
             CreatedAt = now
         };
 
         _db.InventoryTransactions.Add(ledgerRow);
-        level.PhysicalQty += ledgerRow.PhysicalDelta;
+        level.PhysicalQty += signedQuantity;
         level.UpdatedAt = now;
 
-        // The ledger row must exist before anything can reference its id.
+        // The consumption rows reference this row's id, so it has to exist first. Still one
+        // transaction — two saves inside it, not two transactions.
         await _db.SaveChangesAsync(cancellationToken);
 
-        // ponytail: unconditional AddLayer -- this task's write path only ever runs the
-        // inflow branch, since RejectBadInput refuses every outflow direction before this
-        // point, and Damage/Loss/PersonalUse have no consumption code until Task 4. Task 4
-        // replaces this with a branch on direction (AddLayer vs. FifoCostEngine.Consume).
-        _db.InventoryCostLayers.Add(FifoCostEngine.AddLayer(
-            input.VariantId, locationId, CostLayerSourceType.OpeningStock,
-            ledgerRow.Id, input.Quantity, input.UnitCost, now));
+        if (signedQuantity > 0)
+        {
+            _db.InventoryCostLayers.Add(FifoCostEngine.AddLayer(
+                level.VariantId, level.LocationId, SourceOf(type), ledgerRow.Id,
+                signedQuantity, unitCost, now));
+        }
+        else
+        {
+            await ConsumeAsync(
+                level, ledgerRow, -signedQuantity, allowShortfall, now, cancellationToken);
+        }
 
         await _db.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
 
         return new MovementView(
             ledgerRow.Id, ledgerRow.OccurredAt, ledgerRow.Type,
             ledgerRow.PhysicalDelta, ledgerRow.TotalCost, ledgerRow.Reason);
+    }
+
+    private static CostLayerSourceType SourceOf(InventoryTransactionType type) =>
+        type == InventoryTransactionType.OpeningStock
+            ? CostLayerSourceType.OpeningStock
+            : CostLayerSourceType.AdjustmentIn;
+
+    private async Task ConsumeAsync(
+        StockLevel level,
+        InventoryTransaction ledgerRow,
+        int quantity,
+        bool allowShortfall,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        // The order here IS the FIFO order, and ix_layers_fifo is the index that serves it.
+        // The engine trusts this order and does not re-sort.
+        var openLayers = await _db.InventoryCostLayers
+            .Where(l => l.VariantId == level.VariantId
+                     && l.LocationId == level.LocationId
+                     && l.RemainingQty > 0)
+            .OrderBy(l => l.ReceivedAt).ThenBy(l => l.Id)
+            .ToListAsync(cancellationToken);
+
+        var plan = FifoCostEngine.Consume(openLayers, quantity, allowShortfall);
+        var byId = openLayers.ToDictionary(l => l.Id);
+
+        foreach (var draw in plan.Draws)
+        {
+            byId[draw.LayerId].RemainingQty -= draw.Quantity;
+
+            _db.InventoryCostConsumptions.Add(new InventoryCostConsumption
+            {
+                CostLayerId = draw.LayerId,
+                InventoryTransactionId = ledgerRow.Id,
+                Quantity = draw.Quantity,
+                ReversedQty = 0,
+                UnitCost = draw.UnitCost,
+                TotalCost = draw.UnitCost * draw.Quantity,
+                ConsumedAt = now
+            });
+        }
+
+        ledgerRow.TotalCost = plan.TotalCost;
+
+        // A single rate only when every layer drawn shared one. Averaging two rates would
+        // print a per-unit figure that no bag was ever bought at.
+        ledgerRow.UnitCost = plan.Draws.Select(d => d.UnitCost).Distinct().Count() == 1
+            ? plan.Draws[0].UnitCost
+            : null;
     }
 }
