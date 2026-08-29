@@ -1,3 +1,5 @@
+using SlingKing.Application.Common;
+
 namespace SlingKing.Application.Catalog;
 
 public interface IProductService
@@ -33,7 +35,7 @@ public interface IProductService
 
     /// <summary>
     /// Marks the product inactive. Variant rows are deliberately untouched, so reactivating
-    /// restores exactly the states they had. Throws <see cref="CatalogException"/> with 404
+    /// restores exactly the states they had. Throws <see cref="AppException"/> with 404
     /// if no product has that id. Nothing is ever deleted.
     /// </summary>
     Task DeactivateAsync(long id, CancellationToken cancellationToken = default);

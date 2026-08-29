@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using SlingKing.Application.Catalog;
+using SlingKing.Application.Common;
 
 namespace SlingKing.Api.Middleware;
 
@@ -21,9 +21,9 @@ public sealed class ProblemDetailsExceptionHandler : IExceptionHandler
         HttpContext context, Exception exception, CancellationToken cancellationToken)
     {
         // A rejected request is not a failure of ours. It is logged at information level and
-        // its message — authored in CatalogException, never derived from an inner exception —
+        // its message — authored in AppException, never derived from an inner exception —
         // is returned verbatim. Everything below this block still becomes a generic 500.
-        if (exception is CatalogException rejected)
+        if (exception is AppException rejected)
         {
             if (rejected.InnerException is null)
             {

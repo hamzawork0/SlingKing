@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SlingKing.Application.Common;
 using SlingKing.Application.Common.Abstractions;
 using SlingKing.Domain.Catalog;
 
@@ -35,7 +36,7 @@ public sealed class CategoryService : ICategoryService
 
         if (taken)
         {
-            throw CatalogException.Conflict($"A category named \"{trimmed}\" already exists.");
+            throw AppException.Conflict($"A category named \"{trimmed}\" already exists.");
         }
 
         var category = new Category
@@ -56,7 +57,7 @@ public sealed class CategoryService : ICategoryService
     {
         var category = await _db.Categories
             .SingleOrDefaultAsync(c => c.Id == id, cancellationToken)
-            ?? throw CatalogException.NotFound("That category does not exist.");
+            ?? throw AppException.NotFound("That category does not exist.");
 
         var trimmed = name.Trim();
 
@@ -68,7 +69,7 @@ public sealed class CategoryService : ICategoryService
 
         if (taken)
         {
-            throw CatalogException.Conflict($"A category named \"{trimmed}\" already exists.");
+            throw AppException.Conflict($"A category named \"{trimmed}\" already exists.");
         }
 
         category.Name = trimmed;
