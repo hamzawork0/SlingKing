@@ -120,6 +120,10 @@ public sealed class StockService : IStockService
         // The ledger row must exist before anything can reference its id.
         await _db.SaveChangesAsync(cancellationToken);
 
+        // ponytail: unconditional AddLayer -- this task's write path only ever runs the
+        // inflow branch, since RejectBadInput refuses every outflow direction before this
+        // point, and Damage/Loss/PersonalUse have no consumption code until Task 4. Task 4
+        // replaces this with a branch on direction (AddLayer vs. FifoCostEngine.Consume).
         _db.InventoryCostLayers.Add(FifoCostEngine.AddLayer(
             input.VariantId, locationId, CostLayerSourceType.OpeningStock,
             ledgerRow.Id, input.Quantity, input.UnitCost, now));
