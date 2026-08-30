@@ -531,4 +531,136 @@ public class InventoryEndpointTests : IClassFixture<SlingKingApiFactory>, IAsync
             .SingleAsync(s => s.VariantId == variantId));
         level.PhysicalQty.ShouldBe(2);
     }
+
+    private record StockRow(
+        long VariantId, string Sku, string ProductName, string? Colour, string? Size,
+        int PhysicalQty, int LowStockThreshold);
+
+    private record StockItemView(
+        long VariantId, string Sku, string ProductName, string? Colour, string? Size,
+        int PhysicalQty, int LowStockThreshold, decimal? StockValue,
+        List<MovementView> Movements);
+
+    [Fact]
+    public async Task The_list_shows_one_row_per_variant_with_its_level()
+    {
+        var variantId = await NewVariantAsync();
+        await OpenAsync(variantId, 7, 100m);
+
+        var rows = await _client.GetFromJsonAsync<List<StockRow>>("/api/v1/inventory");
+
+        var row = rows!.Single(r => r.VariantId == variantId);
+        row.PhysicalQty.ShouldBe(7);
+        row.Colour.ShouldBe("Tan");
+        row.Size.ShouldBe("Standard");
+        row.LowStockThreshold.ShouldBe(5);
+        row.Sku.ShouldEndWith("-V01");
+    }
+
+    [Fact]
+    public async Task The_list_can_be_searched_by_sku()
+    {
+        var variantId = await NewVariantAsync();
+        await OpenAsync(variantId, 1, null);
+
+        var all = await _client.GetFromJsonAsync<List<StockRow>>("/api/v1/inventory");
+        var sku = all!.Single(r => r.VariantId == variantId).Sku;
+
+        var found = await _client.GetFromJsonAsync<List<StockRow>>(
+            $"/api/v1/inventory?search={sku}");
+
+        found!.Count.ShouldBe(1);
+        found[0].VariantId.ShouldBe(variantId);
+    }
+
+    [Fact]
+    public async Task Low_only_shows_a_variant_at_or_under_its_threshold()
+    {
+        var variantId = await NewVariantAsync();
+
+        // Threshold is 5. Four is low; six is not.
+        await OpenAsync(variantId, 4, null);
+
+        var low = await _client.GetFromJsonAsync<List<StockRow>>(
+            "/api/v1/inventory?lowOnly=true");
+        low!.ShouldContain(r => r.VariantId == variantId);
+
+        await OpenAsync(variantId, 2, null);
+
+        var notLow = await _client.GetFromJsonAsync<List<StockRow>>(
+            "/api/v1/inventory?lowOnly=true");
+        notLow!.ShouldNotContain(r => r.VariantId == variantId);
+    }
+
+    [Fact]
+    public async Task Low_only_ignores_a_variant_with_no_threshold_set()
+    {
+        // A threshold of zero would otherwise flag every empty variant forever, which makes
+        // the filter useless on a catalogue that is still being entered.
+        var created = await _client.PostAsJsonAsync("/api/v1/products", new ProductRequest(
+            $"NoThresh {Guid.NewGuid():N}"[..16], null, null,
+            [new VariantRequest(null, "Black", null, 4500m, 0, true)]));
+
+        var product = await created.Content.ReadFromJsonAsync<ProductView>();
+        var variantId = product!.Variants.Single().Id;
+
+        var low = await _client.GetFromJsonAsync<List<StockRow>>(
+            "/api/v1/inventory?lowOnly=true");
+
+        low!.ShouldNotContain(r => r.VariantId == variantId);
+    }
+
+    [Fact]
+    public async Task The_item_returns_its_history_newest_first_and_what_it_is_worth()
+    {
+        var variantId = await NewVariantAsync();
+        await OpenAsync(variantId, 10, 120m);
+
+        await _client.PostAsJsonAsync("/api/v1/inventory/movements",
+            new MovementRequest(variantId, "Damage", 4, null, "Water damaged in transit"));
+
+        var item = await _client.GetFromJsonAsync<StockItemView>(
+            $"/api/v1/inventory/{variantId}");
+
+        item!.PhysicalQty.ShouldBe(6);
+        item.Movements.Count.ShouldBe(2);
+        item.Movements[0].Type.ShouldBe("Damage");
+        item.Movements[0].Reason.ShouldBe("Water damaged in transit");
+        item.Movements[1].Type.ShouldBe("OpeningStock");
+
+        // Six left in a layer bought at 120.
+        item.StockValue.ShouldBe(720m);
+    }
+
+    [Fact]
+    public async Task An_item_holding_stock_of_unknown_cost_is_worth_an_unknown_amount()
+    {
+        var variantId = await NewVariantAsync();
+        await OpenAsync(variantId, 3, null);
+        await OpenAsync(variantId, 5, 200m);
+
+        var item = await _client.GetFromJsonAsync<StockItemView>(
+            $"/api/v1/inventory/{variantId}");
+
+        // 1000.00 is what the layer we know about is worth. Printing it as the total would
+        // understate the stock by whatever the other three cost.
+        item!.StockValue.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task An_unknown_item_is_not_found()
+    {
+        var response = await _client.GetAsync("/api/v1/inventory/999999999");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Reading_the_list_requires_a_token()
+    {
+        using var anonymous = _factory.CreateClient();
+
+        (await anonymous.GetAsync("/api/v1/inventory")).StatusCode
+            .ShouldBe(HttpStatusCode.Unauthorized);
+    }
 }

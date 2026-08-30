@@ -24,4 +24,19 @@ public interface IStockService
     /// </exception>
     Task<RecountResult> RecountAsync(
         long variantId, int countedQuantity, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// One row per ACTIVE variant. <paramref name="search"/> matches product name, product
+    /// code and SKU — the same fields the products list searches, so the two screens behave
+    /// the same way.
+    /// </summary>
+    /// <param name="lowOnly">
+    /// Physical quantity at or under the threshold. Variants with a threshold of zero are
+    /// excluded: they would otherwise flag forever and make the filter useless.
+    /// </param>
+    Task<IReadOnlyList<StockRow>> ListAsync(
+        string? search, bool lowOnly, CancellationToken cancellationToken = default);
+
+    /// <summary>Null when the variant does not exist or is retired.</summary>
+    Task<StockItemView?> GetAsync(long variantId, CancellationToken cancellationToken = default);
 }

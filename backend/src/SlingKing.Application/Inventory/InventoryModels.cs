@@ -43,3 +43,35 @@ public record MovementView(
 /// and the ledger should not carry a row saying so.
 /// </summary>
 public record RecountResult(int Previous, int Counted, int Difference, MovementView? Movement);
+
+/// <summary>
+/// One line of the stock list. Carries no money: a value column would make every list
+/// render touch the cost layers for a figure the item page already shows.
+/// </summary>
+public record StockRow(
+    long VariantId,
+    string Sku,
+    string ProductName,
+    string? Colour,
+    string? Size,
+    int PhysicalQty,
+    int LowStockThreshold);
+
+/// <summary>
+/// <c>Movements</c> is newest-first, which is the order the page reads them in. There is no
+/// running-total column: the client has the whole list and accumulates it itself, rather than
+/// the same arithmetic being done twice in two languages.
+/// </summary>
+/// <param name="StockValue">
+/// Null when any open layer has an unknown cost. A partial total would understate the stock.
+/// </param>
+public record StockItemView(
+    long VariantId,
+    string Sku,
+    string ProductName,
+    string? Colour,
+    string? Size,
+    int PhysicalQty,
+    int LowStockThreshold,
+    decimal? StockValue,
+    IReadOnlyList<MovementView> Movements);

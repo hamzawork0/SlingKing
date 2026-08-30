@@ -41,4 +41,22 @@ public class InventoryController : ControllerBase
         long variantId, RecountRequest request, CancellationToken cancellationToken) =>
         Ok(await _stock.RecountAsync(
             variantId, request.CountedQuantity!.Value, cancellationToken));
+
+    [HttpGet]
+    [ProducesResponseType(typeof(IReadOnlyList<StockRow>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> List(
+        [FromQuery] string? search,
+        [FromQuery] bool lowOnly,
+        CancellationToken cancellationToken) =>
+        Ok(await _stock.ListAsync(search, lowOnly, cancellationToken));
+
+    [HttpGet("{variantId:long}")]
+    [ProducesResponseType(typeof(StockItemView), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Get(long variantId, CancellationToken cancellationToken)
+    {
+        var item = await _stock.GetAsync(variantId, cancellationToken);
+
+        return item is null ? NotFound() : Ok(item);
+    }
 }

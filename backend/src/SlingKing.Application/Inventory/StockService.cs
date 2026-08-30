@@ -268,4 +268,106 @@ public sealed class StockService : IStockService
             ? plan.Draws[0].UnitCost
             : null;
     }
+
+    public async Task<IReadOnlyList<StockRow>> ListAsync(
+        string? search, bool lowOnly, CancellationToken cancellationToken = default)
+    {
+        var locationId = await DefaultLocationIdAsync(cancellationToken);
+
+        var query = _db.ProductVariants
+            .AsNoTracking()
+            .Where(v => v.IsActive && v.Product!.IsActive);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            // ToLowerInvariant has no EF Core translation. The local must be lowered with a
+            // culture-independent call; the in-query side must stay ToLower(). Do not
+            // "make them consistent" — one of the two will stop compiling to SQL.
+            var term = search.Trim().ToLowerInvariant();
+
+            query = query.Where(v =>
+                v.Sku.ToLower().Contains(term) ||
+                v.Product!.Name.ToLower().Contains(term) ||
+                v.Product.Code.ToLower().Contains(term));
+        }
+
+        // ponytail: EF8 will not translate an OrderBy (or a lowOnly Where) applied on top of
+        // this projection, because PhysicalQty is a correlated Sum(...) ?? 0 rather than a
+        // plain column. Materialise here and finish in memory rather than fighting the
+        // translator — the catalogue is tens of rows, and ProductService.ListAsync already
+        // takes the same trade at this scale.
+        var rows = await query.Select(v => new StockRow(
+            v.Id,
+            v.Sku,
+            v.Product!.Name,
+            v.Colour,
+            v.Size,
+            _db.StockLevels
+                .Where(s => s.VariantId == v.Id && s.LocationId == locationId)
+                .Sum(s => (int?)s.PhysicalQty) ?? 0,
+            v.LowStockThreshold))
+            .ToListAsync(cancellationToken);
+
+        IEnumerable<StockRow> result = rows;
+
+        if (lowOnly)
+        {
+            result = result.Where(r => r.LowStockThreshold > 0
+                                     && r.PhysicalQty <= r.LowStockThreshold);
+        }
+
+        return result.OrderBy(r => r.Sku).ToList();
+    }
+
+    public async Task<StockItemView?> GetAsync(
+        long variantId, CancellationToken cancellationToken = default)
+    {
+        var locationId = await DefaultLocationIdAsync(cancellationToken);
+
+        var header = await _db.ProductVariants
+            .AsNoTracking()
+            .Where(v => v.Id == variantId && v.IsActive)
+            .Select(v => new StockRow(
+                v.Id,
+                v.Sku,
+                v.Product!.Name,
+                v.Colour,
+                v.Size,
+                _db.StockLevels
+                    .Where(s => s.VariantId == v.Id && s.LocationId == locationId)
+                    .Sum(s => (int?)s.PhysicalQty) ?? 0,
+                v.LowStockThreshold))
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (header is null)
+        {
+            return null;
+        }
+
+        var movements = await _db.InventoryTransactions
+            .AsNoTracking()
+            .Where(t => t.VariantId == variantId && t.LocationId == locationId)
+            .OrderByDescending(t => t.OccurredAt).ThenByDescending(t => t.Id)
+            .Select(t => new MovementView(
+                t.Id, t.OccurredAt, t.Type, t.PhysicalDelta, t.TotalCost, t.Reason))
+            .ToListAsync(cancellationToken);
+
+        var openLayers = await _db.InventoryCostLayers
+            .AsNoTracking()
+            .Where(l => l.VariantId == variantId
+                     && l.LocationId == locationId
+                     && l.RemainingQty > 0)
+            .Select(l => new { l.RemainingQty, l.UnitCost })
+            .ToListAsync(cancellationToken);
+
+        // Unknown, not partial, and unknown for empty stock too — nothing is held, so nothing
+        // is known about what it cost. Summed in memory because the null rule is not a SUM.
+        var stockValue = openLayers.Count > 0 && openLayers.All(l => l.UnitCost is not null)
+            ? openLayers.Sum(l => l.UnitCost!.Value * l.RemainingQty)
+            : (decimal?)null;
+
+        return new StockItemView(
+            header.VariantId, header.Sku, header.ProductName, header.Colour, header.Size,
+            header.PhysicalQty, header.LowStockThreshold, stockValue, movements);
+    }
 }
