@@ -99,7 +99,7 @@ untouched.
   `Invalid(string)`. Every later task throws this and nothing else for caller-caused
   failures.
 
-- [ ] **Step 1: Capture the current test count**
+- [x] **Step 1: Capture the current test count**
 
 Run: `cd backend && dotnet test 2>&1 | Select-String -Pattern "Passed!|Failed!"`
 
@@ -107,7 +107,7 @@ Write the two numbers down. Task 1 must not change either of them. If the suite 
 not green before you start, stop and report that — do not begin a refactor on a red
 suite.
 
-- [ ] **Step 2: Create the new file**
+- [x] **Step 2: Create the new file**
 
 Create `backend/src/SlingKing.Application/Common/AppException.cs`:
 
@@ -141,13 +141,13 @@ public sealed class AppException : Exception
 }
 ```
 
-- [ ] **Step 3: Delete the old class**
+- [x] **Step 3: Delete the old class**
 
 In `backend/src/SlingKing.Application/Catalog/CatalogModels.cs`, delete the entire
 `CatalogException` class and its doc comment — from `/// <summary>` down to the closing
 brace before `public record CategoryOption`. Leave every record in that file alone.
 
-- [ ] **Step 4: Repoint the six usages**
+- [x] **Step 4: Repoint the six usages**
 
 In each of `CategoryService.cs`, `ProductService.cs`, `ICategoryService.cs`,
 `IProductService.cs`: replace every `CatalogException` with `AppException`. The service
@@ -162,21 +162,21 @@ change `exception is CatalogException rejected` to `exception is AppException re
 Update the comment on the line above — it says "authored in CatalogException" — to say
 `AppException`.
 
-- [ ] **Step 5: Verify nothing still names the old type**
+- [x] **Step 5: Verify nothing still names the old type**
 
 Run: `cd backend && Select-String -Path "src\*\**\*.cs","tests\*\**\*.cs" -Pattern "CatalogException"`
 
 Expected: no matches. Anything under `bin/` or `obj/` is a stale build artefact and does
 not count — if the only hits are there, you are done.
 
-- [ ] **Step 6: Build and run the full suite**
+- [x] **Step 6: Build and run the full suite**
 
 Run: `cd backend && dotnet build -warnaserror; if ($?) { dotnet test }`
 
 Expected: build clean with zero warnings, and **exactly the same passed count as Step 1**.
 A changed count means this was not a pure rename — find out why before continuing.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/src backend/tests
@@ -211,7 +211,7 @@ returns a plan, and never saves anything; `StockService` applies the plan in Tas
   - `static ConsumptionPlan FifoCostEngine.Consume(IReadOnlyList<InventoryCostLayer> openLayers, int quantity, bool allowShortfall)`
   - `static InventoryCostLayer FifoCostEngine.AddLayer(long variantId, int locationId, CostLayerSourceType sourceType, long sourceId, int quantity, decimal? unitCost, DateTimeOffset now)`
 
-- [ ] **Step 1: Write the models**
+- [x] **Step 1: Write the models**
 
 Create `backend/src/SlingKing.Application/Inventory/InventoryModels.cs`:
 
@@ -237,7 +237,7 @@ public sealed record ConsumptionPlan(
     IReadOnlyList<LayerDraw> Draws, int Drawn, decimal? TotalCost);
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 Create `backend/tests/SlingKing.UnitTests/Inventory/FifoCostEngineTests.cs`:
 
@@ -394,14 +394,14 @@ public class FifoCostEngineTests
 }
 ```
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
 Run: `cd backend && dotnet test tests/SlingKing.UnitTests --filter FullyQualifiedName~FifoCostEngineTests`
 
 Expected: the project does not compile — `FifoCostEngine` does not exist. That is the
 correct failure. Do not proceed until you have seen it.
 
-- [ ] **Step 4: Write the engine**
+- [x] **Step 4: Write the engine**
 
 Create `backend/src/SlingKing.Application/Inventory/FifoCostEngine.cs`:
 
@@ -517,13 +517,13 @@ public static class FifoCostEngine
 }
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `cd backend && dotnet test tests/SlingKing.UnitTests --filter FullyQualifiedName~FifoCostEngineTests`
 
 Expected: 10 passed.
 
-- [ ] **Step 6: Prove the unknown-cost rule is actually load-bearing**
+- [x] **Step 6: Prove the unknown-cost rule is actually load-bearing**
 
 Temporarily change `TotalOf` to ignore null rates:
 
@@ -539,7 +539,7 @@ null was expected.
 has never been seen to fail is decoration, and this is the rule the whole optional-cost
 design rests on.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/src/SlingKing.Application/Inventory backend/tests/SlingKing.UnitTests/Inventory
@@ -579,7 +579,7 @@ without consumption logic in the same diff.
   - `Task<MovementView> IStockService.RecordMovementAsync(MovementInput, CancellationToken)`
   - `POST /api/v1/inventory/movements`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `backend/tests/SlingKing.IntegrationTests/Api/InventoryEndpointTests.cs`. Later
 tasks add to this file; this step establishes it with its helpers.
@@ -794,13 +794,13 @@ public class InventoryEndpointTests : IClassFixture<SlingKingApiFactory>, IAsync
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && dotnet test tests/SlingKing.IntegrationTests --filter FullyQualifiedName~InventoryEndpointTests`
 
 Expected: compile failure or 404s — there is no endpoint yet.
 
-- [ ] **Step 3: Extend the models**
+- [x] **Step 3: Extend the models**
 
 Append to `backend/src/SlingKing.Application/Inventory/InventoryModels.cs`:
 
@@ -826,7 +826,7 @@ public record MovementView(
     string? Reason);
 ```
 
-- [ ] **Step 4: Write the service interface**
+- [x] **Step 4: Write the service interface**
 
 Create `backend/src/SlingKing.Application/Inventory/IStockService.cs`:
 
@@ -848,7 +848,7 @@ public interface IStockService
 }
 ```
 
-- [ ] **Step 5: Write the service**
+- [x] **Step 5: Write the service**
 
 Create `backend/src/SlingKing.Application/Inventory/StockService.cs`:
 
@@ -994,7 +994,7 @@ direction is rejected before it reaches the cost step, because `Damage` and frie
 no consumption code until Task 4. Task 4 replaces the unconditional `AddLayer` with a
 branch on `direction`.**
 
-- [ ] **Step 6: Write the request contract**
+- [x] **Step 6: Write the request contract**
 
 Create `backend/src/SlingKing.Api/Contracts/Inventory/InventoryContracts.cs`:
 
@@ -1014,7 +1014,7 @@ public record MovementRequest(
     [MaxLength(256)] string? Reason);
 ```
 
-- [ ] **Step 7: Write the controller**
+- [x] **Step 7: Write the controller**
 
 Create `backend/src/SlingKing.Api/Controllers/InventoryController.cs`:
 
@@ -1056,7 +1056,7 @@ public class InventoryController : ControllerBase
 }
 ```
 
-- [ ] **Step 8: Register the service**
+- [x] **Step 8: Register the service**
 
 In `backend/src/SlingKing.Infrastructure/DependencyInjection.cs`, immediately after the
 `services.AddScoped<IProductService, ProductService>();` line, add:
@@ -1067,13 +1067,13 @@ In `backend/src/SlingKing.Infrastructure/DependencyInjection.cs`, immediately af
 
 Add `using SlingKing.Application.Inventory;` to the file's usings.
 
-- [ ] **Step 9: Run the tests to verify they pass**
+- [x] **Step 9: Run the tests to verify they pass**
 
 Run: `cd backend && dotnet test tests/SlingKing.IntegrationTests --filter FullyQualifiedName~InventoryEndpointTests`
 
 Expected: 7 passed.
 
-- [ ] **Step 10: Prove the lock statement actually runs**
+- [x] **Step 10: Prove the lock statement actually runs**
 
 Temporarily change the SQL in `LockLevelAsync` to `select 1 from stock_levels where
 variant_id = {variantId} and location_id = {locationId} for update nowait` and re-run.
@@ -1081,7 +1081,7 @@ Expected: still 7 passed — the statement is valid and reaching the database. T
 `for update` back. Task 6 is where the lock's *behaviour* gets a real test; this step
 only proves the statement is not silently a no-op.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add backend/src backend/tests
@@ -1111,7 +1111,7 @@ transaction start to matter: consumption rows reference the ledger row's id.
   `RecordMovementAsync` (Task 3).
 - Produces: no new public surface. Task 5 calls the private `AppendAsync` introduced here.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append these to `InventoryEndpointTests.cs`, inside the class:
 
@@ -1303,7 +1303,7 @@ Append these to `InventoryEndpointTests.cs`, inside the class:
     }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && dotnet test tests/SlingKing.IntegrationTests --filter FullyQualifiedName~InventoryEndpointTests`
 
@@ -1312,7 +1312,7 @@ Expected: the seven new tests fail. `Damage_lowers_the_level...` fails on the la
 regardless of direction, so a Damage currently *adds* stock. That is exactly the branch
 Step 3 replaces.
 
-- [ ] **Step 3: Split the write path into a reusable append**
+- [x] **Step 3: Split the write path into a reusable append**
 
 In `StockService.cs`, replace the body of `RecordMovementAsync` from
 `await using var transaction` to the end of the method with the following, and add the
@@ -1451,13 +1451,13 @@ validation, the variant check, the location lookup — stays exactly as it is.
 Delete the `ponytail:` comment left at the end of Task 3 — the branch it described now
 exists.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && dotnet test tests/SlingKing.IntegrationTests --filter FullyQualifiedName~InventoryEndpointTests`
 
 Expected: 14 passed.
 
-- [ ] **Step 5: Prove the FIFO ordering is load-bearing**
+- [x] **Step 5: Prove the FIFO ordering is load-bearing**
 
 Temporarily change the `.OrderBy(l => l.ReceivedAt).ThenBy(l => l.Id)` in `ConsumeAsync`
 to `.OrderByDescending(l => l.ReceivedAt).ThenByDescending(l => l.Id)` and re-run.
@@ -1468,14 +1468,14 @@ comes back as 1000 instead of 700, and the remaining quantities as `[3, 0]`.
 **Then put the ascending order back and re-run — 14 passed.** A first-in-first-out test
 that passes under last-in-first-out is not testing the ordering.
 
-- [ ] **Step 6: Run the whole backend suite**
+- [x] **Step 6: Run the whole backend suite**
 
 Run: `cd backend && dotnet build -warnaserror; if ($?) { dotnet test }`
 
 Expected: everything green, zero warnings. Nothing in Tasks 1–4 should have moved a
 catalog test.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/src backend/tests
@@ -1510,7 +1510,7 @@ you — and the one path allowed to bring cost records back into line with stock
   - `Task<RecountResult> IStockService.RecountAsync(long variantId, int countedQuantity, CancellationToken)`
   - `POST /api/v1/inventory/{variantId}/recount`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `InventoryEndpointTests.cs`:
 
@@ -1657,13 +1657,13 @@ Append to `InventoryEndpointTests.cs`:
     }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && dotnet test tests/SlingKing.IntegrationTests --filter FullyQualifiedName~InventoryEndpointTests`
 
 Expected: the six new tests fail with 404 — there is no recount route.
 
-- [ ] **Step 3: Add the result model**
+- [x] **Step 3: Add the result model**
 
 Append to `backend/src/SlingKing.Application/Inventory/InventoryModels.cs`:
 
@@ -1675,7 +1675,7 @@ Append to `backend/src/SlingKing.Application/Inventory/InventoryModels.cs`:
 public record RecountResult(int Previous, int Counted, int Difference, MovementView? Movement);
 ```
 
-- [ ] **Step 4: Extend the interface**
+- [x] **Step 4: Extend the interface**
 
 Add to `IStockService`:
 
@@ -1693,7 +1693,7 @@ Add to `IStockService`:
         long variantId, int countedQuantity, CancellationToken cancellationToken = default);
 ```
 
-- [ ] **Step 5: Implement it**
+- [x] **Step 5: Implement it**
 
 Add to `StockService`, after `RecordMovementAsync`:
 
@@ -1746,7 +1746,7 @@ Add to `StockService`, after `RecordMovementAsync`:
     }
 ```
 
-- [ ] **Step 6: Add the contract and the route**
+- [x] **Step 6: Add the contract and the route**
 
 Append to `backend/src/SlingKing.Api/Contracts/Inventory/InventoryContracts.cs`:
 
@@ -1768,13 +1768,13 @@ Add to `InventoryController`:
             variantId, request.CountedQuantity!.Value, cancellationToken));
 ```
 
-- [ ] **Step 7: Run the tests to verify they pass**
+- [x] **Step 7: Run the tests to verify they pass**
 
 Run: `cd backend && dotnet test tests/SlingKing.IntegrationTests --filter FullyQualifiedName~InventoryEndpointTests`
 
 Expected: 20 passed.
 
-- [ ] **Step 8: Prove the exemption is load-bearing**
+- [x] **Step 8: Prove the exemption is load-bearing**
 
 Temporarily change `allowShortfall: true` in `RecountAsync` to `allowShortfall: false`
 and re-run.
@@ -1785,7 +1785,7 @@ end the exemption exists to avoid.
 
 **Then put `true` back and re-run — 20 passed.**
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add backend/src backend/tests
@@ -1814,7 +1814,7 @@ because it needs two overlapping requests, which the single shared client of
   (Task 5), `SlingKingApiFactory`.
 - Produces: nothing.
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 Create `backend/tests/SlingKing.IntegrationTests/Persistence/StockConcurrencyTests.cs`:
 
@@ -1960,13 +1960,13 @@ public class StockConcurrencyTests : IClassFixture<SlingKingApiFactory>, IAsyncL
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they pass**
+- [x] **Step 2: Run the tests to verify they pass**
 
 Run: `cd backend && dotnet test tests/SlingKing.IntegrationTests --filter FullyQualifiedName~StockConcurrencyTests`
 
 Expected: 2 passed.
 
-- [ ] **Step 3: Prove the lock is what makes them pass**
+- [x] **Step 3: Prove the lock is what makes them pass**
 
 This is the whole point of the task. In `StockService.LockLevelAsync`, comment out the
 `ExecuteSqlInterpolatedAsync` call so only the LINQ read remains, and re-run.
@@ -1982,7 +1982,7 @@ exists. If it does fail, expect a 500 out of a constraint violation rather than 
 **Then restore the lock statement and re-run — 2 passed.** Say in the commit message that
 the test was seen to fail; the gate asks for that evidence.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add backend/tests
@@ -2022,7 +2022,7 @@ The list and the item. Both are pure reads — no transaction, no lock.
 accumulates it in one `reduce`; sending a precomputed column would be the same arithmetic
 done twice, in two languages, with two chances to disagree.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `InventoryEndpointTests.cs`:
 
@@ -2160,13 +2160,13 @@ Append to `InventoryEndpointTests.cs`:
     }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && dotnet test tests/SlingKing.IntegrationTests --filter FullyQualifiedName~InventoryEndpointTests`
 
 Expected: the eight new tests fail — no read routes exist.
 
-- [ ] **Step 3: Add the view models**
+- [x] **Step 3: Add the view models**
 
 Append to `backend/src/SlingKing.Application/Inventory/InventoryModels.cs`:
 
@@ -2204,7 +2204,7 @@ public record StockItemView(
     IReadOnlyList<MovementView> Movements);
 ```
 
-- [ ] **Step 4: Extend the interface**
+- [x] **Step 4: Extend the interface**
 
 Add to `IStockService`:
 
@@ -2225,7 +2225,7 @@ Add to `IStockService`:
     Task<StockItemView?> GetAsync(long variantId, CancellationToken cancellationToken = default);
 ```
 
-- [ ] **Step 5: Implement the reads**
+- [x] **Step 5: Implement the reads**
 
 Add to `StockService`:
 
@@ -2325,7 +2325,7 @@ Add to `StockService`:
     }
 ```
 
-- [ ] **Step 6: Add the routes**
+- [x] **Step 6: Add the routes**
 
 Add to `InventoryController`:
 
@@ -2349,19 +2349,19 @@ Add to `InventoryController`:
     }
 ```
 
-- [ ] **Step 7: Run the tests to verify they pass**
+- [x] **Step 7: Run the tests to verify they pass**
 
 Run: `cd backend && dotnet test tests/SlingKing.IntegrationTests --filter FullyQualifiedName~InventoryEndpointTests`
 
 Expected: 28 passed.
 
-- [ ] **Step 8: Run the whole backend suite**
+- [x] **Step 8: Run the whole backend suite**
 
 Run: `cd backend && dotnet build -warnaserror; if ($?) { dotnet test }`
 
 Expected: everything green, zero warnings.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add backend/src backend/tests
@@ -2390,7 +2390,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
   `StockRow`, `StockItemView`, `MovementView`, `MovementType`, `RecountResult`. Task 9
   imports all of them.
 
-- [ ] **Step 1: Write the API layer**
+- [x] **Step 1: Write the API layer**
 
 Create `frontend/src/api/inventory.ts`:
 
@@ -2485,7 +2485,7 @@ export async function recount(
 }
 ```
 
-- [ ] **Step 2: Write the list screen**
+- [x] **Step 2: Write the list screen**
 
 Create `frontend/src/features/inventory/InventoryPage.tsx`:
 
@@ -2608,7 +2608,7 @@ export function InventoryPage() {
 }
 ```
 
-- [ ] **Step 3: Add the route**
+- [x] **Step 3: Add the route**
 
 In `frontend/src/app/router.tsx`, add the import and the route. The route goes above the
 `path: "*"` catch-all — anything after it is unreachable.
@@ -2621,13 +2621,13 @@ import { InventoryPage } from "../features/inventory/InventoryPage";
       { path: "inventory", element: <InventoryPage /> },
 ```
 
-- [ ] **Step 4: Type-check and lint**
+- [x] **Step 4: Type-check and lint**
 
 Run: `cd frontend && npx tsc -b; if ($?) { npm run lint }`
 
 Expected: both clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src
@@ -2659,7 +2659,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Produces: `parseCount(raw: string): number | null` and
   `recountSentence(counted: number | null, current: number): string`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `frontend/src/features/inventory/recount.test.ts`:
 
@@ -2713,13 +2713,13 @@ describe("recountSentence", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd frontend && npx vitest run src/features/inventory/recount.test.ts`
 
 Expected: failure resolving `./recount` — the module does not exist.
 
-- [ ] **Step 3: Write the arithmetic**
+- [x] **Step 3: Write the arithmetic**
 
 Create `frontend/src/features/inventory/recount.ts`:
 
@@ -2752,13 +2752,13 @@ export function recountSentence(counted: number | null, current: number): string
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd frontend && npx vitest run src/features/inventory/recount.test.ts`
 
 Expected: 8 passed.
 
-- [ ] **Step 5: Write the movement form**
+- [x] **Step 5: Write the movement form**
 
 Create `frontend/src/features/inventory/RecordMovement.tsx`:
 
@@ -2917,7 +2917,7 @@ export function RecordMovement({ variantId }: { variantId: number }) {
 }
 ```
 
-- [ ] **Step 6: Write the recount form**
+- [x] **Step 6: Write the recount form**
 
 Create `frontend/src/features/inventory/Recount.tsx`:
 
@@ -2994,7 +2994,7 @@ export function Recount({ variantId, current }: { variantId: number; current: nu
 }
 ```
 
-- [ ] **Step 7: Write the item page**
+- [x] **Step 7: Write the item page**
 
 Create `frontend/src/features/inventory/StockItemPage.tsx`:
 
@@ -3152,7 +3152,7 @@ export function StockItemPage() {
 }
 ```
 
-- [ ] **Step 8: Add the route**
+- [x] **Step 8: Add the route**
 
 In `frontend/src/app/router.tsx`, add the import and the route — again above the `"*"`
 catch-all:
@@ -3165,13 +3165,13 @@ import { StockItemPage } from "../features/inventory/StockItemPage";
       { path: "inventory/:variantId", element: <StockItemPage /> },
 ```
 
-- [ ] **Step 9: Run the frontend checks**
+- [x] **Step 9: Run the frontend checks**
 
 Run: `cd frontend && npx tsc -b; if ($?) { npm run lint; if ($?) { npx vitest run } }`
 
 Expected: type-check clean, lint clean, all vitest tests passing (10 from M2a plus 8 new).
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add frontend/src
@@ -3196,13 +3196,13 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Consumes: everything.
 - Produces: the milestone.
 
-- [ ] **Step 1: Fix the stale not-found copy**
+- [x] **Step 1: Fix the stale not-found copy**
 
 `frontend/src/app/NotFound.tsx` still promises that Products, Inventory and Purchases are
 on their way. Two of the three now exist. Read the file and change that sentence to name
 only Purchases — keep the surrounding voice and markup exactly as they are.
 
-- [ ] **Step 2: Run everything**
+- [x] **Step 2: Run everything**
 
 Run: `cd backend && dotnet build -warnaserror; if ($?) { dotnet test }`
 
@@ -3214,7 +3214,7 @@ Run: `cd frontend && npx tsc -b; if ($?) { npm run lint; if ($?) { npx vitest ru
 
 Expected: all clean, 18 tests passing.
 
-- [ ] **Step 3: Confirm no migration crept in**
+- [x] **Step 3: Confirm no migration crept in**
 
 Run: `git diff --name-only main -- backend/src/SlingKing.Infrastructure/Migrations`
 
@@ -3222,7 +3222,7 @@ Expected: no output. The schema was complete before this milestone started, and
 `SchemaConstraintTests` asserting 28 tables must still pass — which Step 2 has already
 shown.
 
-- [ ] **Step 4: Start the app**
+- [x] **Step 4: Start the app**
 
 Run these in two background shells:
 
@@ -3233,7 +3233,7 @@ cd frontend && npm run dev
 
 Wait for the API to report it is listening, and Vite to print its local URL.
 
-- [ ] **Step 5: Probe the stub before trusting the browser**
+- [x] **Step 5: Probe the stub before trusting the browser**
 
 Before driving any UI, confirm the API actually rejects a bad token:
 
@@ -3243,7 +3243,7 @@ Expected: `401`. If this returns 200, the session you are about to test is not
 authenticated the way you think it is, and every result after it is worthless. Adjust the
 port to whatever the API reported.
 
-- [ ] **Step 6: Walk it in Playwright**
+- [x] **Step 6: Walk it in Playwright**
 
 Sign in with the throwaway seed account — `SLINGKING_SEED_ADMIN_EMAIL` and
 `SLINGKING_SEED_ADMIN_PASSWORD` from the process environment. **Never type the owner's
@@ -3268,18 +3268,18 @@ Then, against the real API:
 
 Take a screenshot of the item page with its history and keep it with the task notes.
 
-- [ ] **Step 7: Check the browser console**
+- [x] **Step 7: Check the browser console**
 
 Read the console for the whole walkthrough. Expected: no errors, no React warnings, no
 unhandled rejections. A 409 or 400 logged by axios for the deliberate refusals in steps 4
 and 5 is expected and correct.
 
-- [ ] **Step 8: Stop the servers**
+- [x] **Step 8: Stop the servers**
 
 Stop both background shells. Leaving them running holds Supabase pooler connections out
 of a cap of fifteen.
 
-- [ ] **Step 9: Request a whole-branch review**
+- [x] **Step 9: Request a whole-branch review**
 
 Use `superpowers:requesting-code-review` against the full diff from `main`, not
 task-by-task. This is not optional and it is not a formality: M2a's whole-branch review
@@ -3294,14 +3294,14 @@ Point the reviewer at the seams specifically:
 - Does any code substitute `0` for an unknown cost, anywhere, in either language?
 - Does the two-saves-in-one-transaction structure hold if the second save throws?
 
-- [ ] **Step 10: Address the findings, then merge**
+- [x] **Step 10: Address the findings, then merge**
 
 Use `superpowers:receiving-code-review` on whatever comes back — verify each finding
 before implementing it; do not agree performatively.
 
 Then `superpowers:finishing-a-development-branch`. Tag the merge `r1-m2b`.
 
-- [ ] **Step 11: Tick this plan's boxes and commit it**
+- [x] **Step 11: Tick this plan's boxes and commit it**
 
 Mark every checkbox in this file, then:
 
