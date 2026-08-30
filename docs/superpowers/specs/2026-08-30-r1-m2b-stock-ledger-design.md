@@ -180,8 +180,28 @@ with layers holding only 8. A damage of 10 throws and says "run a recount".
 The recount then needs to consume 10 as well, hits the same wall, and throws
 the same sentence — leaving the owner with an instruction that cannot be
 followed. The counted number is authoritative by definition, so a recount is
-allowed to bring the cost records into line with it. That is precisely what
-makes it the fix.
+allowed to proceed where an ordinary outflow may not.
+
+> **Known limitation, found by the M2b whole-branch review and deferred to M3.**
+> The paragraph above originally ended "That is precisely what makes it the
+> fix." That claim is false in the **down** direction, and the correction is
+> recorded here rather than quietly dropped.
+>
+> A recount down over a shortfall lets the movement through, but it does not
+> heal the divergence: it consumes what the layers hold and leaves the gap. In
+> the example, recounting to 2 draws all 8 and commits with `physical_qty = 2`
+> and **zero** open layers — invariant 2 is still broken, and the next
+> ordinary outflow throws the same sentence again. The only escape as built is
+> to recount to 0 and then to the real count, which nothing tells the owner to
+> do.
+>
+> **This is unreachable in M2b.** No endpoint here can create the entry state:
+> every inflow lays a layer, and every outflow that could run short is refused.
+> It becomes reachable in **M3**, when purchases add a second writer to the
+> ledger — which is also when the deferred `/verify` endpoint earns its keep.
+> The fix belongs there: on a short recount, either lay a compensating layer or
+> zero the remainder, so the recount leaves the two records in agreement and
+> the refusal sentence becomes true again.
 
 **A recount-up creates a layer with a null `unit_cost`.** The endpoint takes
 only a counted quantity; nobody has said what the extra stock cost, and the

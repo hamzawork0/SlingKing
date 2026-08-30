@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SlingKing.Application.Common;
 using SlingKing.Application.Common.Abstractions;
 using SlingKing.Domain.Catalog;
 using SlingKing.Domain.Inventory;
@@ -34,7 +35,7 @@ public sealed class ProductService : IProductService
 
             if (!seen.Add(key))
             {
-                throw CatalogException.Conflict(
+                throw AppException.Conflict(
                     "Two variants have the same colour and size. Each combination may appear once.");
             }
         }
@@ -46,12 +47,12 @@ public sealed class ProductService : IProductService
         {
             if (variant.SellingPrice < 0)
             {
-                throw CatalogException.Invalid("A selling price cannot be negative.");
+                throw AppException.Invalid("A selling price cannot be negative.");
             }
 
             if (variant.LowStockThreshold < 0)
             {
-                throw CatalogException.Invalid("A low stock threshold cannot be negative.");
+                throw AppException.Invalid("A low stock threshold cannot be negative.");
             }
         }
     }
@@ -68,7 +69,7 @@ public sealed class ProductService : IProductService
 
         if (!exists)
         {
-            throw CatalogException.Invalid("That category does not exist.");
+            throw AppException.Invalid("That category does not exist.");
         }
     }
 
@@ -190,7 +191,7 @@ public sealed class ProductService : IProductService
             // name rather than a PostgresException/SqlState check because Application must stay
             // free of any database-provider package — it references only
             // Microsoft.EntityFrameworkCore.Relational plus Domain.
-            throw CatalogException.Conflict(
+            throw AppException.Conflict(
                 "That change would give two active variants the same colour and size. " +
                 "If you are swapping colours between variants, save the change in two steps.",
                 dbFailure);
@@ -254,7 +255,7 @@ public sealed class ProductService : IProductService
         var product = await _db.Products
             .Include(p => p.Variants)
             .SingleOrDefaultAsync(p => p.Id == id, cancellationToken)
-            ?? throw CatalogException.NotFound("That product does not exist.");
+            ?? throw AppException.NotFound("That product does not exist.");
 
         await RequireKnownCategoryAsync(input.CategoryId, cancellationToken);
         RejectInvalidVariants(input.Variants);
@@ -265,7 +266,7 @@ public sealed class ProductService : IProductService
         {
             if (!known.ContainsKey(row.Id!.Value))
             {
-                throw CatalogException.Invalid(
+                throw AppException.Invalid(
                     "A variant in the request does not belong to this product.");
             }
         }
@@ -274,7 +275,7 @@ public sealed class ProductService : IProductService
 
         if (withIds.Count != withIds.Distinct().Count())
         {
-            throw CatalogException.Invalid("The same variant appears more than once in the request.");
+            throw AppException.Invalid("The same variant appears more than once in the request.");
         }
 
         // The combination check must consider the product's whole active picture after the
@@ -388,7 +389,7 @@ public sealed class ProductService : IProductService
             // Application must stay free of any database-provider package — it references only
             // Microsoft.EntityFrameworkCore.Relational plus Domain. Anything else propagates to
             // become a logged 500 instead of being mislabelled as a duplicate colour.
-            throw CatalogException.Conflict(
+            throw AppException.Conflict(
                 "That change would give two active variants the same colour and size. " +
                 "If you are swapping colours between variants, save the change in two steps.",
                 dbFailure);
@@ -400,7 +401,7 @@ public sealed class ProductService : IProductService
     public async Task DeactivateAsync(long id, CancellationToken cancellationToken = default)
     {
         var product = await _db.Products.SingleOrDefaultAsync(p => p.Id == id, cancellationToken)
-            ?? throw CatalogException.NotFound("That product does not exist.");
+            ?? throw AppException.NotFound("That product does not exist.");
 
         product.IsActive = false;
         product.UpdatedAt = _clock.UtcNow;

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
@@ -129,7 +130,12 @@ builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
             ContentTypes = { "application/problem+json" }
         };
     };
-});
+})
+    // Global, not a per-property [JsonConverter]: no existing response carries an enum, so
+    // nothing else changes shape today, and a per-property attribute would just leave the
+    // next enum to rediscover that the wire format needs to be a name, not a number.
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ProblemDetailsExceptionHandler>();
