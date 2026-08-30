@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { recount } from "../../api/inventory";
 import { serverMessage } from "../../api/client";
-import { parseCount, recountSentence } from "./recount";
+import { parseCount, recountSentence } from "../../lib/recount";
 
 export function Recount({ variantId, current }: { variantId: number; current: number }) {
   const [counted, setCounted] = useState("");

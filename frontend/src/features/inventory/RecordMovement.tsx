@@ -8,7 +8,7 @@ import {
   type MovementType,
 } from "../../api/inventory";
 import { serverMessage } from "../../api/client";
-import { parseCount } from "./recount";
+import { parseCount } from "../../lib/recount";
 
 const field =
   "mt-1.5 w-full rounded-stamp border border-rule bg-panel px-3 py-2.5 text-[14px] " +

@@ -4,10 +4,7 @@ import { getStockItem, movementLabels } from "../../api/inventory";
 import { formatInr } from "../../lib/money";
 import { formatIstDateTime } from "../../lib/dates";
 import { RecordMovement } from "./RecordMovement";
-// Explicit extension: on a case-insensitive filesystem, the bare specifier "./Recount"
-// resolves ambiguously against the sibling "recount.ts" (the arithmetic module) before it
-// ever reaches this component's own "Recount.tsx" — the extension makes the target exact.
-import { Recount } from "./Recount.tsx";
+import { Recount } from "./Recount";
 
 export function StockItemPage() {
   const { variantId } = useParams();
