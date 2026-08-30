@@ -1,6 +1,8 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using SlingKing.Application.Common;
 using SlingKing.Application.Common.Abstractions;
+using SlingKing.Domain.Catalog;
 using SlingKing.Domain.Common;
 using SlingKing.Domain.Inventory;
 
@@ -58,6 +60,16 @@ public sealed class StockService : IStockService
         }
     }
 
+    /// <summary>
+    /// A variant is reachable only when it and its parent product are both active. A
+    /// retired product must take its variants out of reach everywhere — the list, the item
+    /// page, and both write paths — not just off the list. An <see cref="Expression"/> so it
+    /// composes with <c>Where</c> whether the caller is filtering a set (<see cref="ListAsync"/>)
+    /// or narrowing to one id (everywhere else); EF translates the composed query either way.
+    /// </summary>
+    private static readonly Expression<Func<ProductVariant, bool>> IsReachable =
+        v => v.IsActive && v.Product!.IsActive;
+
     private Task<int> DefaultLocationIdAsync(CancellationToken cancellationToken) =>
         _db.Locations.Where(l => l.IsDefault).Select(l => l.Id).SingleAsync(cancellationToken);
 
@@ -84,7 +96,9 @@ public sealed class StockService : IStockService
         RejectBadInput(input);
 
         var variantExists = await _db.ProductVariants
-            .AnyAsync(v => v.Id == input.VariantId && v.IsActive, cancellationToken);
+            .Where(v => v.Id == input.VariantId)
+            .Where(IsReachable)
+            .AnyAsync(cancellationToken);
 
         if (!variantExists)
         {
@@ -122,7 +136,9 @@ public sealed class StockService : IStockService
         }
 
         var variantExists = await _db.ProductVariants
-            .AnyAsync(v => v.Id == variantId && v.IsActive, cancellationToken);
+            .Where(v => v.Id == variantId)
+            .Where(IsReachable)
+            .AnyAsync(cancellationToken);
 
         if (!variantExists)
         {
@@ -278,7 +294,7 @@ public sealed class StockService : IStockService
 
         var query = _db.ProductVariants
             .AsNoTracking()
-            .Where(v => v.IsActive && v.Product!.IsActive);
+            .Where(IsReachable);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -328,7 +344,8 @@ public sealed class StockService : IStockService
 
         var header = await _db.ProductVariants
             .AsNoTracking()
-            .Where(v => v.Id == variantId && v.IsActive)
+            .Where(v => v.Id == variantId)
+            .Where(IsReachable)
             .Select(v => new StockRow(
                 v.Id,
                 v.Sku,

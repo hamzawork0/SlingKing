@@ -78,6 +78,21 @@ public class InventoryEndpointTests : IClassFixture<SlingKingApiFactory>, IAsync
         return product!.Variants.Single().Id;
     }
 
+    /// <summary>
+    /// Same product-and-one-variant shape as <see cref="NewVariantAsync"/>, but also hands
+    /// back the product id — needed by anything that has to retire the product afterwards.
+    /// </summary>
+    private async Task<(long ProductId, long VariantId)> NewProductAndVariantAsync()
+    {
+        var response = await _client.PostAsJsonAsync("/api/v1/products", new ProductRequest(
+            $"Stock {Guid.NewGuid():N}"[..16], null, null,
+            [new VariantRequest(null, "Tan", "Standard", 4500m, 5, true)]));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var product = await response.Content.ReadFromJsonAsync<ProductView>();
+        return (product!.Id, product.Variants.Single().Id);
+    }
+
     private async Task<T> QueryAsync<T>(Func<AppDbContext, Task<T>> read)
     {
         using var scope = _factory.Services.CreateScope();
@@ -679,6 +694,59 @@ public class InventoryEndpointTests : IClassFixture<SlingKingApiFactory>, IAsync
         using var anonymous = _factory.CreateClient();
         var unauthenticated = await anonymous.GetAsync("/api/v1/inventory/999999999");
         unauthenticated.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task A_variant_of_a_retired_product_cannot_be_read()
+    {
+        var (productId, variantId) = await NewProductAndVariantAsync();
+        await OpenAsync(variantId, 5, 100m);
+
+        var deactivate = await _client.PostAsync(
+            $"/api/v1/products/{productId}/deactivate", null);
+        deactivate.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var response = await _client.GetAsync($"/api/v1/inventory/{variantId}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task A_variant_of_a_retired_product_refuses_a_movement()
+    {
+        var (productId, variantId) = await NewProductAndVariantAsync();
+        await OpenAsync(variantId, 5, 100m);
+
+        var deactivate = await _client.PostAsync(
+            $"/api/v1/products/{productId}/deactivate", null);
+        deactivate.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var response = await _client.PostAsJsonAsync("/api/v1/inventory/movements",
+            new MovementRequest(variantId, "OpeningStock", 1, null, null));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        var problem = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+        problem!["title"].ToString().ShouldBe("That item no longer exists.");
+    }
+
+    [Fact]
+    public async Task A_variant_of_a_retired_product_refuses_a_recount()
+    {
+        var (productId, variantId) = await NewProductAndVariantAsync();
+        await OpenAsync(variantId, 5, 100m);
+
+        var deactivate = await _client.PostAsync(
+            $"/api/v1/products/{productId}/deactivate", null);
+        deactivate.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/inventory/{variantId}/recount", new RecountRequest(3));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        var problem = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+        problem!["title"].ToString().ShouldBe("That item no longer exists.");
     }
 
     [Fact]
