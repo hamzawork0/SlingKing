@@ -65,16 +65,20 @@ public static class FifoCostEngine
                 "Stock and cost records disagree for this item — run a recount to correct it.");
         }
 
-        return new ConsumptionPlan(draws, quantity - outstanding, TotalOf(draws));
+        return new ConsumptionPlan(draws, quantity - outstanding, TotalOf(draws, outstanding));
     }
 
     /// <summary>
-    /// Null when any draw has an unknown rate, and null when nothing was drawn. A partial sum
-    /// understates the real cost and reads on screen as a fact rather than as a gap.
+    /// Null when any draw has an unknown rate, null when nothing was drawn, and null when a
+    /// permitted shortfall left units undrawn — <paramref name="outstanding"/> greater than
+    /// zero means the layers ran out before <paramref name="draws"/> covered the full
+    /// quantity. Summing only the units that were drawn and calling that the total would
+    /// understate the real cost and read on screen as a fact rather than as a gap; the same is
+    /// true whether the gap is an unknown rate or units that were never drawn at all.
     /// </summary>
-    private static decimal? TotalOf(IReadOnlyList<LayerDraw> draws)
+    private static decimal? TotalOf(IReadOnlyList<LayerDraw> draws, int outstanding)
     {
-        if (draws.Count == 0 || draws.Any(d => d.UnitCost is null))
+        if (outstanding > 0 || draws.Count == 0 || draws.Any(d => d.UnitCost is null))
         {
             return null;
         }

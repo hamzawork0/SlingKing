@@ -96,7 +96,11 @@ public class FifoCostEngineTests
 
         plan.Draws.ShouldBe([new LayerDraw(1, 3, 100m)]);
         plan.Drawn.ShouldBe(3);
-        plan.TotalCost.ShouldBe(300m);
+
+        // 300.00 would be the partial sum of the 3 units actually drawn, presented as the
+        // total for a movement of 10 — understating the real cost of the 7 that were never
+        // drawn at all. Null is the honest answer, same as the unknown-rate case above.
+        plan.TotalCost.ShouldBeNull();
     }
 
     [Fact]

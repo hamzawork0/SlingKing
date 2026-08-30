@@ -370,10 +370,25 @@ public class InventoryEndpointTests : IClassFixture<SlingKingApiFactory>, IAsync
         var variantId = await NewVariantAsync();
         await OpenAsync(variantId, 10, 120m);
 
-        await _client.PostAsJsonAsync("/api/v1/inventory/movements",
+        var damage = await _client.PostAsJsonAsync("/api/v1/inventory/movements",
             new MovementRequest(variantId, "Damage", 4, null, "Water damaged in transit"));
-        await _client.PostAsJsonAsync("/api/v1/inventory/movements",
+        damage.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        // Recount up: 6 on hand -> 9. The +3 opens a new, null-cost layer — the recount is
+        // the one movement authorised to add stock with no rate attached.
+        var recountUp = await _client.PostAsJsonAsync(
+            $"/api/v1/inventory/{variantId}/recount", new RecountRequest(9));
+        recountUp.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Recount down: 9 on hand -> 5. The -4 draws through the FIFO engine same as any
+        // other outflow, and a recount is the one caller allowed to draw it short.
+        var recountDown = await _client.PostAsJsonAsync(
+            $"/api/v1/inventory/{variantId}/recount", new RecountRequest(5));
+        recountDown.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var personalUse = await _client.PostAsJsonAsync("/api/v1/inventory/movements",
             new MovementRequest(variantId, "PersonalUse", 1, null, "Gifted to my sister"));
+        personalUse.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         var summed = await QueryAsync(db => db.InventoryTransactions
             .Where(t => t.VariantId == variantId)
@@ -653,6 +668,17 @@ public class InventoryEndpointTests : IClassFixture<SlingKingApiFactory>, IAsync
         var response = await _client.GetAsync("/api/v1/inventory/999999999");
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // GetAsync returns null on a miss and the controller maps that to a bare NotFound(),
+        // which carries no ProblemDetails body — unlike its two siblings above. The status
+        // code alone would therefore pass just as well against a route that does not exist
+        // at all, so prove the route matched by a different signal: an anonymous request to
+        // this exact path must be refused by [Authorize] with 401, which only happens once
+        // routing has found this endpoint's metadata. A route that does not exist never
+        // reaches authorization and 404s regardless of the token.
+        using var anonymous = _factory.CreateClient();
+        var unauthenticated = await anonymous.GetAsync("/api/v1/inventory/999999999");
+        unauthenticated.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Fact]

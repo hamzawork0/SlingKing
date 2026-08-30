@@ -93,7 +93,6 @@ public sealed class StockService : IStockService
 
         var locationId = await DefaultLocationIdAsync(cancellationToken);
         var direction = PostableDirections[input.Type];
-        var now = _clock.UtcNow;
 
         await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
 
@@ -262,9 +261,12 @@ public sealed class StockService : IStockService
 
         ledgerRow.TotalCost = plan.TotalCost;
 
-        // A single rate only when every layer drawn shared one. Averaging two rates would
-        // print a per-unit figure that no bag was ever bought at.
-        ledgerRow.UnitCost = plan.Draws.Select(d => d.UnitCost).Distinct().Count() == 1
+        // A single rate only when every layer drawn shared one, and only when the layers
+        // covered the full quantity. Averaging two rates would print a per-unit figure that
+        // no bag was ever bought at — and so would a rate drawn from only some of the units,
+        // on a short draw, when the rest were never drawn at all.
+        var shortfallTaken = plan.Drawn < quantity;
+        ledgerRow.UnitCost = !shortfallTaken && plan.Draws.Select(d => d.UnitCost).Distinct().Count() == 1
             ? plan.Draws[0].UnitCost
             : null;
     }

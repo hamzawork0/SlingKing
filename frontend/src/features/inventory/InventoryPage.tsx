@@ -12,7 +12,10 @@ export function InventoryPage() {
     queryFn: () => listStock(search, lowOnly),
   });
 
+  const unfiltered = !search && !lowOnly;
+
   const nothingCounted =
+    unfiltered &&
     stock.data !== undefined &&
     stock.data.length > 0 &&
     stock.data.every((row) => row.physicalQty === 0);
@@ -81,9 +84,12 @@ export function InventoryPage() {
             {stock.data.map((row) => {
               // A threshold of zero means none was set, so it can never be low. Matches
               // exactly what lowOnly filters on at the server.
-              // Suppressed while nothingCounted: a quantity of 0 satisfies this test for every
-              // row with a threshold, which would paint the whole table red under the calm
+              // Suppressed while nothingCounted: first-run only (no search, no toggle, every
+              // row still at 0) — a quantity of 0 satisfies this test for every row with a
+              // threshold, which would paint the whole table red under the calm
               // "nothing counted yet" message — nothing has been counted, so nothing is low.
+              // Any filter (search or lowOnly) makes the view no longer "nothing counted",
+              // so the low-stock colour applies normally.
               const low =
                 !nothingCounted &&
                 row.lowStockThreshold > 0 &&
