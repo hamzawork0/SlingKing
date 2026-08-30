@@ -81,7 +81,13 @@ export function InventoryPage() {
             {stock.data.map((row) => {
               // A threshold of zero means none was set, so it can never be low. Matches
               // exactly what lowOnly filters on at the server.
-              const low = row.lowStockThreshold > 0 && row.physicalQty <= row.lowStockThreshold;
+              // Suppressed while nothingCounted: a quantity of 0 satisfies this test for every
+              // row with a threshold, which would paint the whole table red under the calm
+              // "nothing counted yet" message — nothing has been counted, so nothing is low.
+              const low =
+                !nothingCounted &&
+                row.lowStockThreshold > 0 &&
+                row.physicalQty <= row.lowStockThreshold;
 
               return (
                 <tr key={row.variantId} className="border-b border-rule">
