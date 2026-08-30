@@ -11,3 +11,6 @@ public record MovementRequest(
     [Required, Range(1, 1_000_000)] int? Quantity,
     [Range(0, 9_999_999)] decimal? UnitCost,
     [MaxLength(256)] string? Reason);
+
+public record RecountRequest(
+    [Required, Range(0, 1_000_000)] int? CountedQuantity);

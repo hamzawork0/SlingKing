@@ -32,4 +32,13 @@ public class InventoryController : ControllerBase
         // reports the location of what the caller would actually go and look at.
         return Created($"/api/v1/inventory/{request.VariantId}", movement);
     }
+
+    [HttpPost("{variantId:long}/recount")]
+    [ProducesResponseType(typeof(RecountResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Recount(
+        long variantId, RecountRequest request, CancellationToken cancellationToken) =>
+        Ok(await _stock.RecountAsync(
+            variantId, request.CountedQuantity!.Value, cancellationToken));
 }

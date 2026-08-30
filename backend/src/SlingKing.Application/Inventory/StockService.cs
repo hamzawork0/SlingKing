@@ -114,6 +114,53 @@ public sealed class StockService : IStockService
         return movement;
     }
 
+    public async Task<RecountResult> RecountAsync(
+        long variantId, int countedQuantity, CancellationToken cancellationToken = default)
+    {
+        if (countedQuantity < 0)
+        {
+            throw AppException.Invalid("A count cannot be negative.");
+        }
+
+        var variantExists = await _db.ProductVariants
+            .AnyAsync(v => v.Id == variantId && v.IsActive, cancellationToken);
+
+        if (!variantExists)
+        {
+            throw AppException.NotFound("That item no longer exists.");
+        }
+
+        var locationId = await DefaultLocationIdAsync(cancellationToken);
+
+        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+
+        var level = await LockLevelAsync(variantId, locationId, cancellationToken);
+
+        var previous = level.PhysicalQty;
+        var difference = countedQuantity - previous;
+
+        if (difference == 0)
+        {
+            // Nothing happened. A zero-delta ledger row would be noise in the one history
+            // the owner actually reads.
+            await transaction.CommitAsync(cancellationToken);
+            return new RecountResult(previous, countedQuantity, 0, null);
+        }
+
+        var movement = await AppendAsync(
+            level, InventoryTransactionType.Adjustment, difference,
+            unitCost: null, reason: $"Recount: counted {countedQuantity}",
+            // The exemption. A recount is the one operation authorised to bring cost records
+            // into line with stock, because the counted number is authoritative by definition.
+            // Without this, the disagreement message names a fix that hits the same wall.
+            allowShortfall: true,
+            cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return new RecountResult(previous, countedQuantity, difference, movement);
+    }
+
     /// <summary>
     /// One ledger row, one level update, and the matching cost movement. Assumes the caller
     /// holds the lock on <paramref name="level"/> and has an open transaction — it commits

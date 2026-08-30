@@ -390,4 +390,145 @@ public class InventoryEndpointTests : IClassFixture<SlingKingApiFactory>, IAsync
 
         openLayers.ShouldBe(level.PhysicalQty);
     }
+
+    private record RecountRequest(int CountedQuantity);
+
+    private record RecountResult(
+        int Previous, int Counted, int Difference, MovementView? Movement);
+
+    [Fact]
+    public async Task Counting_more_than_the_system_says_adjusts_up_at_an_unknown_cost()
+    {
+        var variantId = await NewVariantAsync();
+        await OpenAsync(variantId, 6, 100m);
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/inventory/{variantId}/recount", new RecountRequest(9));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var result = await response.Content.ReadFromJsonAsync<RecountResult>();
+        result!.Previous.ShouldBe(6);
+        result.Counted.ShouldBe(9);
+        result.Difference.ShouldBe(3);
+        result.Movement!.Type.ShouldBe("Adjustment");
+        result.Movement.PhysicalDelta.ShouldBe(3);
+
+        var level = await QueryAsync(db => db.StockLevels
+            .SingleAsync(s => s.VariantId == variantId));
+        level.PhysicalQty.ShouldBe(9);
+
+        var newest = await QueryAsync(db => db.InventoryCostLayers
+            .Where(l => l.VariantId == variantId)
+            .OrderByDescending(l => l.Id)
+            .FirstAsync());
+
+        newest.OriginalQty.ShouldBe(3);
+
+        // A recount says how many were counted and nothing about what they cost.
+        // Zero here would claim three free bags.
+        newest.UnitCost.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Counting_fewer_consumes_the_difference()
+    {
+        var variantId = await NewVariantAsync();
+        await OpenAsync(variantId, 6, 100m);
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/inventory/{variantId}/recount", new RecountRequest(4));
+
+        var result = await response.Content.ReadFromJsonAsync<RecountResult>();
+        result!.Difference.ShouldBe(-2);
+        result.Movement!.PhysicalDelta.ShouldBe(-2);
+        result.Movement.TotalCost.ShouldBe(200m);
+
+        var layer = await QueryAsync(db => db.InventoryCostLayers
+            .SingleAsync(l => l.VariantId == variantId));
+        layer.RemainingQty.ShouldBe(4);
+    }
+
+    [Fact]
+    public async Task Counting_exactly_what_the_system_says_writes_nothing()
+    {
+        var variantId = await NewVariantAsync();
+        await OpenAsync(variantId, 6, 100m);
+
+        var before = await QueryAsync(db => db.InventoryTransactions
+            .CountAsync(t => t.VariantId == variantId));
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/inventory/{variantId}/recount", new RecountRequest(6));
+
+        var result = await response.Content.ReadFromJsonAsync<RecountResult>();
+        result!.Difference.ShouldBe(0);
+        result.Movement.ShouldBeNull();
+
+        var after = await QueryAsync(db => db.InventoryTransactions
+            .CountAsync(t => t.VariantId == variantId));
+        after.ShouldBe(before);
+    }
+
+    [Fact]
+    public async Task A_negative_count_is_refused()
+    {
+        var variantId = await NewVariantAsync();
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/inventory/{variantId}/recount", new RecountRequest(-1));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Recounting_an_unknown_variant_is_not_found()
+    {
+        var response = await _client.PostAsJsonAsync(
+            "/api/v1/inventory/999999999/recount", new RecountRequest(1));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+
+        var problem = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+        problem!["title"].ToString().ShouldBe("That item no longer exists.");
+    }
+
+    [Fact]
+    public async Task An_ordinary_outflow_refuses_when_layers_run_short_but_a_recount_does_not()
+    {
+        var variantId = await NewVariantAsync();
+        await OpenAsync(variantId, 12, 100m);
+
+        // Force the divergence the guard exists for: stock says 12, layers hold 8. Doing it
+        // in SQL rather than through the API is the point — no endpoint can produce this
+        // state, which is why the guard needs a test that manufactures it.
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var layer = await db.InventoryCostLayers.SingleAsync(l => l.VariantId == variantId);
+            layer.RemainingQty = 8;
+            await db.SaveChangesAsync();
+        }
+
+        var refused = await _client.PostAsJsonAsync("/api/v1/inventory/movements",
+            new MovementRequest(variantId, "Damage", 10, null, "Flooded"));
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        var problem = await refused.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+        problem!["title"].ToString().ShouldBe(
+            "Stock and cost records disagree for this item — run a recount to correct it.");
+
+        // The same shortfall, through the recount, must succeed. If it did not, the message
+        // above would name a fix that hits this same wall and returns this same message.
+        var recount = await _client.PostAsJsonAsync(
+            $"/api/v1/inventory/{variantId}/recount", new RecountRequest(2));
+
+        recount.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var level = await QueryAsync(db => db.StockLevels
+            .SingleAsync(s => s.VariantId == variantId));
+        level.PhysicalQty.ShouldBe(2);
+    }
 }

@@ -37,3 +37,9 @@ public record MovementView(
     int PhysicalDelta,
     decimal? TotalCost,
     string? Reason);
+
+/// <summary>
+/// What a recount did. <c>Movement</c> is null when the count matched — nothing happened,
+/// and the ledger should not carry a row saying so.
+/// </summary>
+public record RecountResult(int Previous, int Counted, int Difference, MovementView? Movement);

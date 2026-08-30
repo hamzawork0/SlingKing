@@ -12,4 +12,16 @@ public interface IStockService
     /// </exception>
     Task<MovementView> RecordMovementAsync(
         MovementInput input, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reads the current quantity under the lock, works out the difference, and records it as
+    /// an Adjustment. The current quantity is read inside the transaction on purpose: a caller
+    /// computing the delta from a number its page loaded a minute ago posts a wrong adjustment
+    /// whenever anything happened in between.
+    /// </summary>
+    /// <exception cref="Common.AppException">
+    /// 400 for a negative count. 404 for an unknown or inactive variant.
+    /// </exception>
+    Task<RecountResult> RecountAsync(
+        long variantId, int countedQuantity, CancellationToken cancellationToken = default);
 }
