@@ -53,4 +53,18 @@ public interface IStockService
         long purchaseId,
         IReadOnlyList<PurchaseStockLine> lines,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Takes back everything a purchase brought in: one outflow ledger row per line, each
+    /// consuming that line's OWN cost layer rather than the oldest.
+    /// </summary>
+    /// <remarks>
+    /// Assumes an open transaction and commits nothing. Throws 409 if any of the purchase's
+    /// layers has been drawn from — a bag that has been sold, damaged or lost cannot be
+    /// un-bought.
+    /// </remarks>
+    Task ReversePurchaseAsync(
+        long purchaseId,
+        IReadOnlyList<PurchaseStockLine> lines,
+        CancellationToken cancellationToken = default);
 }

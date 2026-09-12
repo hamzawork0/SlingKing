@@ -15,4 +15,15 @@ public interface IPurchaseService
     /// </exception>
     Task<PurchaseView> RecordAsync(
         PurchaseInput input, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reverses a purchase: its stock goes back out and its cost layers close. The purchase
+    /// stays visible with its reversal in the ledger, because a history that shows bags
+    /// appearing and vanishing for no stated reason is worse than one that shows the mistake.
+    /// </summary>
+    /// <exception cref="AppException">
+    /// 404 if no purchase has that id. 409 if it is already cancelled, or if any of its stock
+    /// has already been sold, damaged or lost.
+    /// </exception>
+    Task<PurchaseView> CancelAsync(long id, CancellationToken cancellationToken = default);
 }

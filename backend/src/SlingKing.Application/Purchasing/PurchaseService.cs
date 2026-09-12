@@ -139,6 +139,36 @@ public sealed class PurchaseService : IPurchaseService
         return await ViewAsync(purchase.Id, cancellationToken);
     }
 
+    public async Task<PurchaseView> CancelAsync(
+        long id, CancellationToken cancellationToken = default)
+    {
+        var purchase = await _db.Purchases
+            .SingleOrDefaultAsync(p => p.Id == id, cancellationToken)
+            ?? throw AppException.NotFound("That purchase does not exist.");
+
+        if (purchase.Status == PurchaseStatus.Cancelled)
+        {
+            throw AppException.Conflict("That purchase is already cancelled.");
+        }
+
+        var items = await _db.PurchaseItems
+            .Where(i => i.PurchaseId == id)
+            .Select(i => new PurchaseStockLine(i.Id, i.VariantId, i.Quantity, i.UnitCost))
+            .ToListAsync(cancellationToken);
+
+        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+
+        await _stock.ReversePurchaseAsync(id, items, cancellationToken);
+
+        purchase.Status = PurchaseStatus.Cancelled;
+        purchase.UpdatedAt = _clock.UtcNow;
+
+        await _db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return await ViewAsync(id, cancellationToken);
+    }
+
     private async Task<PurchaseView> ViewAsync(long id, CancellationToken cancellationToken)
     {
         var header = await _db.Purchases

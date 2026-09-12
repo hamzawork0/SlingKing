@@ -191,6 +191,54 @@ public sealed class StockService : IStockService
         }
     }
 
+    public async Task ReversePurchaseAsync(
+        long purchaseId,
+        IReadOnlyList<PurchaseStockLine> lines,
+        CancellationToken cancellationToken = default)
+    {
+        var locationId = await DefaultLocationIdAsync(cancellationToken);
+
+        // Same ascending order as ApplyPurchaseAsync, for the same deadlock reason.
+        foreach (var line in lines.OrderBy(l => l.VariantId))
+        {
+            // Lock first, THEN look up the layer. Both run on this one IAppDbContext, so a
+            // layer read before the lock is held would be handed back from EF's identity map
+            // rather than re-read once we actually hold the row -- letting the "have these bags
+            // already left?" check in ConsumeLayerAsync be evaluated against a snapshot taken
+            // before a concurrent outflow could land. Locking first closes that window.
+            var level = await LockLevelAsync(line.VariantId, locationId, cancellationToken);
+
+            var layer = await _db.InventoryCostLayers.SingleOrDefaultAsync(
+                l => l.SourceType == CostLayerSourceType.Purchase
+                  && l.SourceId == line.PurchaseItemId,
+                cancellationToken)
+                ?? throw AppException.Conflict(
+                    "This purchase's cost records are missing, so it cannot be cancelled. " +
+                    "Record what actually happened on the Inventory screen instead.");
+
+            // Checked here, before AppendAsync touches anything: AppendAsync writes the level's
+            // new physical_qty in the SAME SaveChangesAsync that adds the ledger row, ahead of
+            // ConsumeLayerAsync's own "already left" check. Once some of this layer has already
+            // gone out, subtracting the full purchased quantity can drive physical_qty negative
+            // and trip ck_physical_non_negative at the database -- a raw 500, not our 409. Catching
+            // that PostgresException is off the table (Application must not know Npgsql exists),
+            // so the check has to run before the write, not after it.
+            if (layer.RemainingQty != layer.OriginalQty)
+            {
+                throw AppException.Conflict(
+                    "Some of these bags have already left. " +
+                    "Record what actually happened on the Inventory screen instead.");
+            }
+
+            await AppendAsync(
+                level, InventoryTransactionType.Purchase, -line.Quantity,
+                unitCost: null, reason: null, allowShortfall: false,
+                new MovementContext(
+                    InventoryReferenceType.Purchase, purchaseId, TargetLayerId: layer.Id),
+                cancellationToken);
+        }
+    }
+
     /// <summary>
     /// One ledger row, one level update, and the matching cost movement. Assumes the caller
     /// holds the lock on <paramref name="level"/> and has an open transaction — it commits
@@ -240,6 +288,11 @@ public sealed class StockService : IStockService
                 context?.SourceId ?? ledgerRow.Id,
                 signedQuantity, unitCost, now));
         }
+        else if (context?.TargetLayerId is long targetLayerId)
+        {
+            await ConsumeLayerAsync(
+                ledgerRow, targetLayerId, -signedQuantity, now, cancellationToken);
+        }
         else
         {
             await ConsumeAsync(
@@ -260,6 +313,46 @@ public sealed class StockService : IStockService
         // Everything else that lays a layer is a recount adjusting upward.
         _ => CostLayerSourceType.AdjustmentIn
     };
+
+    /// <summary>
+    /// Takes <paramref name="quantity"/> out of ONE named layer instead of walking FIFO. Only
+    /// a purchase cancellation uses this: it must take back the bags that purchase brought in,
+    /// and the oldest layer is usually a different purchase's. Running a cancellation through
+    /// the FIFO path leaves every quantity correct and every cost quietly wrong.
+    /// </summary>
+    private async Task ConsumeLayerAsync(
+        InventoryTransaction ledgerRow,
+        long layerId,
+        int quantity,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var layer = await _db.InventoryCostLayers
+            .SingleAsync(l => l.Id == layerId, cancellationToken);
+
+        if (layer.RemainingQty != layer.OriginalQty)
+        {
+            throw AppException.Conflict(
+                "Some of these bags have already left. " +
+                "Record what actually happened on the Inventory screen instead.");
+        }
+
+        layer.RemainingQty -= quantity;
+
+        _db.InventoryCostConsumptions.Add(new InventoryCostConsumption
+        {
+            CostLayerId = layer.Id,
+            InventoryTransactionId = ledgerRow.Id,
+            Quantity = quantity,
+            ReversedQty = 0,
+            UnitCost = layer.UnitCost,
+            TotalCost = layer.UnitCost * quantity,
+            ConsumedAt = now
+        });
+
+        ledgerRow.UnitCost = layer.UnitCost;
+        ledgerRow.TotalCost = layer.UnitCost * quantity;
+    }
 
     private async Task ConsumeAsync(
         StockLevel level,

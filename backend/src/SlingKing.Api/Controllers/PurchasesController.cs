@@ -36,4 +36,11 @@ public class PurchasesController : ControllerBase
         // list the caller will actually go and look at.
         return Created("/api/v1/purchases", created);
     }
+
+    [HttpPost("{id:long}/cancel")]
+    [ProducesResponseType(typeof(PurchaseView), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Cancel(long id, CancellationToken cancellationToken) =>
+        Ok(await _purchases.CancelAsync(id, cancellationToken));
 }

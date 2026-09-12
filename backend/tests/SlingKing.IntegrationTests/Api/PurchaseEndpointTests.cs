@@ -375,4 +375,167 @@ public class PurchaseEndpointTests : IClassFixture<SlingKingApiFactory>, IAsyncL
 
         ledger.TotalCost.ShouldBe(400m);
     }
+
+    private async Task<PurchaseView> RecordAsync(
+        int supplierId, long variantId, int quantity, decimal? unitCost)
+    {
+        var response = await _client.PostAsJsonAsync("/api/v1/purchases",
+            new PurchaseRequest(supplierId, Today, null,
+                [new PurchaseLineRequest(variantId, quantity, unitCost)]));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        return (await response.Content.ReadFromJsonAsync<PurchaseView>())!;
+    }
+
+    [Fact]
+    public async Task Cancelling_takes_the_stock_back_out_and_closes_the_layer()
+    {
+        var supplierId = await NewSupplierAsync();
+        var (_, variantIds) = await NewProductAsync("Tan");
+        var purchase = await RecordAsync(supplierId, variantIds[0], 12, 450m);
+
+        var response = await _client.PostAsync(
+            $"/api/v1/purchases/{purchase.Id}/cancel", null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadFromJsonAsync<PurchaseView>())!.Status
+            .ShouldBe("Cancelled");
+
+        var level = await QueryAsync(db => db.StockLevels
+            .SingleAsync(s => s.VariantId == variantIds[0]));
+        level.PhysicalQty.ShouldBe(0);
+
+        var layer = await QueryAsync(db => db.InventoryCostLayers
+            .SingleAsync(l => l.VariantId == variantIds[0]));
+        layer.RemainingQty.ShouldBe(0);
+
+        // The reversal is a Purchase-type row with a negative delta, referencing the purchase.
+        var reversal = await QueryAsync(db => db.InventoryTransactions
+            .Where(t => t.VariantId == variantIds[0] && t.PhysicalDelta < 0)
+            .SingleAsync());
+
+        reversal.Type.ShouldBe(InventoryTransactionType.Purchase);
+        reversal.PhysicalDelta.ShouldBe(-12);
+        reversal.ReferenceType.ShouldBe(InventoryReferenceType.Purchase);
+        reversal.ReferenceId.ShouldBe(purchase.Id);
+    }
+
+    [Fact]
+    public async Task Cancelling_takes_back_its_own_layer_not_the_oldest()
+    {
+        var supplierId = await NewSupplierAsync();
+        var (_, variantIds) = await NewProductAsync("Tan");
+
+        // Two purchases of the same variant at different costs. The FIRST is older.
+        await RecordAsync(supplierId, variantIds[0], 5, 100m);
+        var second = await RecordAsync(supplierId, variantIds[0], 5, 900m);
+
+        (await _client.PostAsync($"/api/v1/purchases/{second.Id}/cancel", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var layers = await QueryAsync(db => db.InventoryCostLayers
+            .Where(l => l.VariantId == variantIds[0])
+            .OrderBy(l => l.Id)
+            .ToListAsync());
+
+        // Run through FIFO this passes on quantity -- 5 left either way -- while silently
+        // unwinding the FIRST purchase's cost. The assertion that catches it is which layer
+        // still holds stock, and at what price.
+        layers[0].UnitCost.ShouldBe(100m);
+        layers[0].RemainingQty.ShouldBe(5);
+        layers[1].UnitCost.ShouldBe(900m);
+        layers[1].RemainingQty.ShouldBe(0);
+
+        var level = await QueryAsync(db => db.StockLevels
+            .SingleAsync(s => s.VariantId == variantIds[0]));
+        level.PhysicalQty.ShouldBe(5);
+    }
+
+    [Fact]
+    public async Task Cancelling_is_refused_once_any_of_that_stock_has_left()
+    {
+        var supplierId = await NewSupplierAsync();
+        var (_, variantIds) = await NewProductAsync("Tan");
+        var purchase = await RecordAsync(supplierId, variantIds[0], 12, 450m);
+
+        var damage = await _client.PostAsJsonAsync("/api/v1/inventory/movements",
+            new MovementRequest(variantIds[0], "Damage", 1, null, "Torn strap"));
+        damage.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        var response = await _client.PostAsync(
+            $"/api/v1/purchases/{purchase.Id}/cancel", null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        var problem = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+        problem!["title"].ToString().ShouldBe(
+            "Some of these bags have already left. Record what actually happened on the Inventory screen instead.");
+
+        // And nothing was written: the purchase is still Completed and the stock unchanged.
+        var stored = await QueryAsync(db => db.Purchases.SingleAsync(p => p.Id == purchase.Id));
+        stored.Status.ShouldBe(PurchaseStatus.Completed);
+
+        var level = await QueryAsync(db => db.StockLevels
+            .SingleAsync(s => s.VariantId == variantIds[0]));
+        level.PhysicalQty.ShouldBe(11);
+    }
+
+    [Fact]
+    public async Task Cancelling_twice_is_refused()
+    {
+        var supplierId = await NewSupplierAsync();
+        var (_, variantIds) = await NewProductAsync("Tan");
+        var purchase = await RecordAsync(supplierId, variantIds[0], 3, 100m);
+
+        (await _client.PostAsync($"/api/v1/purchases/{purchase.Id}/cancel", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var again = await _client.PostAsync($"/api/v1/purchases/{purchase.Id}/cancel", null);
+        again.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        var problem = await again.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+        problem!["title"].ToString().ShouldBe("That purchase is already cancelled.");
+    }
+
+    [Fact]
+    public async Task Cancelling_an_unknown_purchase_is_not_found()
+    {
+        var response = await _client.PostAsync("/api/v1/purchases/999999999/cancel", null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+
+        var problem = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+        problem!["title"].ToString().ShouldBe("That purchase does not exist.");
+    }
+
+    [Fact]
+    public async Task The_ledger_and_the_layers_still_agree_after_a_purchase_and_a_cancellation()
+    {
+        var supplierId = await NewSupplierAsync();
+        var (_, variantIds) = await NewProductAsync("Tan");
+
+        await RecordAsync(supplierId, variantIds[0], 10, 120m);
+        var second = await RecordAsync(supplierId, variantIds[0], 6, 200m);
+        (await _client.PostAsync($"/api/v1/purchases/{second.Id}/cancel", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        await RecordAsync(supplierId, variantIds[0], 4, 300m);
+
+        var level = await QueryAsync(db => db.StockLevels
+            .SingleAsync(s => s.VariantId == variantIds[0]));
+
+        var summed = await QueryAsync(db => db.InventoryTransactions
+            .Where(t => t.VariantId == variantIds[0])
+            .SumAsync(t => t.PhysicalDelta));
+
+        var openLayers = await QueryAsync(db => db.InventoryCostLayers
+            .Where(l => l.VariantId == variantIds[0] && l.RemainingQty > 0)
+            .SumAsync(l => l.RemainingQty));
+
+        // The M2b spec predicted purchases would break these. They do not, and this is the
+        // test that checks the claim rather than trusting it.
+        summed.ShouldBe(level.PhysicalQty);
+        openLayers.ShouldBe(level.PhysicalQty);
+        level.PhysicalQty.ShouldBe(14);
+    }
 }
