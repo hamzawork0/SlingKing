@@ -6,3 +6,5 @@ namespace SlingKing.Application.Purchasing;
 /// thing this design forbids everywhere else.
 /// </summary>
 public record PurchaseLineInput(long VariantId, int Quantity, decimal? UnitCost);
+
+public record SupplierOption(int Id, string Name, string? Phone);
