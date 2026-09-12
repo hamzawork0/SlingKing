@@ -198,4 +198,46 @@ public sealed class PurchaseService : IPurchaseService
             header.Id, header.Number, header.SupplierId, header.SupplierName,
             header.PurchaseDate, header.Status, header.TotalAmount, header.Notes, lines);
     }
+
+    public async Task<IReadOnlyList<PurchaseView>> ListAsync(
+        string? search, bool includeCancelled, CancellationToken cancellationToken = default)
+    {
+        var query = _db.Purchases.AsNoTracking().AsQueryable();
+
+        if (!includeCancelled)
+        {
+            query = query.Where(p => p.Status != PurchaseStatus.Cancelled);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            // ToLowerInvariant has no EF Core translation. The local must be lowered with a
+            // culture-independent call; the in-query side must stay ToLower(). Do not "make
+            // them consistent" — one of the two will stop compiling to SQL.
+            var term = search.Trim().ToLowerInvariant();
+
+            query = query.Where(p =>
+                p.Number.ToLower().Contains(term) ||
+                p.Supplier!.Name.ToLower().Contains(term));
+        }
+
+        // Newest first, with the id as tiebreak: two purchases recorded in the same second
+        // would otherwise come back in an arbitrary order.
+        var ids = await query
+            .OrderByDescending(p => p.PurchaseDate).ThenByDescending(p => p.Id)
+            .Select(p => p.Id)
+            .ToListAsync(cancellationToken);
+
+        var views = new List<PurchaseView>(ids.Count);
+
+        // ponytail: one round trip per purchase, the same trade ProductService.ListAsync
+        // already takes. A few purchases a month is tens of rows; batch the line query if this
+        // ever reaches thousands.
+        foreach (var id in ids)
+        {
+            views.Add(await ViewAsync(id, cancellationToken));
+        }
+
+        return views;
+    }
 }

@@ -43,4 +43,12 @@ public class PurchasesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Cancel(long id, CancellationToken cancellationToken) =>
         Ok(await _purchases.CancelAsync(id, cancellationToken));
+
+    [HttpGet]
+    [ProducesResponseType(typeof(IReadOnlyList<PurchaseView>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> List(
+        [FromQuery] string? search,
+        [FromQuery] bool includeCancelled,
+        CancellationToken cancellationToken) =>
+        Ok(await _purchases.ListAsync(search, includeCancelled, cancellationToken));
 }

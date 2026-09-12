@@ -26,4 +26,15 @@ public interface IPurchaseService
     /// has already been sold, damaged or lost.
     /// </exception>
     Task<PurchaseView> CancelAsync(long id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Newest first, each with its lines. <paramref name="search"/> matches the purchase
+    /// number and the supplier name.
+    /// </summary>
+    /// <param name="includeCancelled">
+    /// False by default, mirroring the products list's includeInactive. A cancelled purchase
+    /// is history, not something to scroll past every time.
+    /// </param>
+    Task<IReadOnlyList<PurchaseView>> ListAsync(
+        string? search, bool includeCancelled, CancellationToken cancellationToken = default);
 }

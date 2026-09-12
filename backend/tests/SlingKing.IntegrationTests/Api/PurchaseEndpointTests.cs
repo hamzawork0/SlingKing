@@ -538,4 +538,106 @@ public class PurchaseEndpointTests : IClassFixture<SlingKingApiFactory>, IAsyncL
         openLayers.ShouldBe(level.PhysicalQty);
         level.PhysicalQty.ShouldBe(14);
     }
+
+    [Fact]
+    public async Task Reading_the_list_requires_a_token()
+    {
+        using var anonymous = _factory.CreateClient();
+
+        (await anonymous.GetAsync("/api/v1/purchases")).StatusCode
+            .ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task The_list_carries_each_purchase_with_its_lines()
+    {
+        var supplierId = await NewSupplierAsync();
+        var (_, variantIds) = await NewProductAsync("Tan", "Black");
+
+        var response = await _client.PostAsJsonAsync("/api/v1/purchases",
+            new PurchaseRequest(supplierId, Today, "Karol Bagh trip",
+            [
+                new PurchaseLineRequest(variantIds[0], 12, 450m),
+                new PurchaseLineRequest(variantIds[1], 8, 480m)
+            ]));
+
+        var created = await response.Content.ReadFromJsonAsync<PurchaseView>();
+
+        var list = await _client.GetFromJsonAsync<List<PurchaseView>>("/api/v1/purchases");
+
+        var found = list!.Single(p => p.Id == created!.Id);
+        found.Lines.Count.ShouldBe(2);
+        found.TotalAmount.ShouldBe(9240m);
+        found.SupplierName.ShouldNotBeNullOrWhiteSpace();
+        found.Notes.ShouldBe("Karol Bagh trip");
+    }
+
+    [Fact]
+    public async Task The_list_can_be_searched_by_purchase_number()
+    {
+        var supplierId = await NewSupplierAsync();
+        var (_, variantIds) = await NewProductAsync("Tan");
+        var created = await RecordAsync(supplierId, variantIds[0], 3, 100m);
+
+        var found = await _client.GetFromJsonAsync<List<PurchaseView>>(
+            $"/api/v1/purchases?search={created.Number}");
+
+        found!.Count.ShouldBe(1);
+        found[0].Id.ShouldBe(created.Id);
+    }
+
+    [Fact]
+    public async Task The_list_can_be_searched_by_supplier_name()
+    {
+        var name = $"Sadar {Guid.NewGuid():N}"[..16];
+        var supplierResponse = await _client.PostAsJsonAsync("/api/v1/suppliers",
+            new SupplierRequest(name, null));
+        var supplierId = (await supplierResponse.Content
+            .ReadFromJsonAsync<SupplierOption>())!.Id;
+
+        var (_, variantIds) = await NewProductAsync("Tan");
+        var created = await RecordAsync(supplierId, variantIds[0], 3, 100m);
+
+        var found = await _client.GetFromJsonAsync<List<PurchaseView>>(
+            $"/api/v1/purchases?search={name}");
+
+        found!.ShouldContain(p => p.Id == created.Id);
+    }
+
+    [Fact]
+    public async Task Cancelled_purchases_are_hidden_unless_asked_for()
+    {
+        var supplierId = await NewSupplierAsync();
+        var (_, variantIds) = await NewProductAsync("Tan");
+        var created = await RecordAsync(supplierId, variantIds[0], 3, 100m);
+
+        (await _client.PostAsync($"/api/v1/purchases/{created.Id}/cancel", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var hidden = await _client.GetFromJsonAsync<List<PurchaseView>>("/api/v1/purchases");
+        hidden!.ShouldNotContain(p => p.Id == created.Id);
+
+        var shown = await _client.GetFromJsonAsync<List<PurchaseView>>(
+            "/api/v1/purchases?includeCancelled=true");
+        shown!.ShouldContain(p => p.Id == created.Id && p.Status == "Cancelled");
+    }
+
+    [Fact]
+    public async Task The_list_is_newest_first()
+    {
+        var supplierId = await NewSupplierAsync();
+        var (_, variantIds) = await NewProductAsync("Tan");
+
+        var first = await RecordAsync(supplierId, variantIds[0], 1, 10m);
+        var second = await RecordAsync(supplierId, variantIds[0], 1, 10m);
+
+        var list = await _client.GetFromJsonAsync<List<PurchaseView>>("/api/v1/purchases");
+
+        var firstIndex = list!.FindIndex(p => p.Id == first.Id);
+        var secondIndex = list.FindIndex(p => p.Id == second.Id);
+
+        // Both were recorded in the same second, so a purchase_date sort alone would be a
+        // coin toss. The id tiebreak is what makes the order deterministic.
+        secondIndex.ShouldBeLessThan(firstIndex);
+    }
 }
