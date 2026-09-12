@@ -13,7 +13,11 @@ public class Purchase
     public DateTimeOffset PurchaseDate { get; set; }
     public PurchaseStatus Status { get; set; } = PurchaseStatus.Draft;
 
-    /// <summary>Sum of the lines that have a cost. Null when no line is costed.</summary>
+    /// <summary>
+    /// What the purchase cost in total. Null when ANY line has an unknown cost — never a
+    /// partial sum of the lines that happen to be costed, because a total that omits a line
+    /// understates what was paid while still looking like a figure you can trust.
+    /// </summary>
     public decimal? TotalAmount { get; set; }
 
     public string? Notes { get; set; }
