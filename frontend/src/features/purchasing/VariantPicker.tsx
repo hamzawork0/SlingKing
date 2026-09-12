@@ -75,6 +75,11 @@ export function VariantPicker({
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
+        // The delay lets an option button's onClick fire before the list unmounts — an
+        // immediate close on blur would fire first and take the list with it, so the click
+        // would land on nothing.
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
         className="rounded-stamp border-rule bg-panel focus:border-saddle w-full border px-2 py-1.5 text-[14px]"
       />
       {open && (

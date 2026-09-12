@@ -13,12 +13,18 @@ const field =
   "transition-colors placeholder:text-muted/60 focus:border-saddle";
 
 interface DraftRow {
+  id: string;
   variantId: number | null;
   quantity: string;
   unitCost: string;
 }
 
-const blankRow: DraftRow = { variantId: null, quantity: "", unitCost: "" };
+// A stable id, not the array index: removing a middle row shifts every later index, which
+// would re-parent each VariantPicker onto a different logical row and carry its open/term
+// state along with it.
+function newRow(): DraftRow {
+  return { id: crypto.randomUUID(), variantId: null, quantity: "", unitCost: "" };
+}
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -31,7 +37,7 @@ export function PurchaseForm() {
   const [supplierId, setSupplierId] = useState<number | null>(null);
   const [purchaseDate, setPurchaseDate] = useState(today());
   const [notes, setNotes] = useState("");
-  const [rows, setRows] = useState<DraftRow[]>([{ ...blankRow }]);
+  const [rows, setRows] = useState<DraftRow[]>([newRow()]);
   const [error, setError] = useState<string | null>(null);
 
   const save = useMutation({
@@ -163,7 +169,7 @@ export function PurchaseForm() {
           </thead>
           <tbody>
             {rows.map((row, index) => (
-              <tr key={index} className="border-rule border-b">
+              <tr key={row.id} className="border-rule border-b">
                 <td className="w-1/2 py-2 pr-2 align-top">
                   <VariantPicker
                     value={row.variantId}
@@ -212,7 +218,7 @@ export function PurchaseForm() {
         <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
           <button
             type="button"
-            onClick={() => setRows([...rows, { ...blankRow }])}
+            onClick={() => setRows([...rows, newRow()])}
             className="text-saddle text-[13px] font-medium"
           >
             + Add a line
