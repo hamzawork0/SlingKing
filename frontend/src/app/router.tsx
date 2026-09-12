@@ -9,6 +9,7 @@ import { ProductForm } from "../features/catalog/ProductForm";
 import { InventoryPage } from "../features/inventory/InventoryPage";
 import { StockItemPage } from "../features/inventory/StockItemPage";
 import { PurchasesPage } from "../features/purchasing/PurchasesPage";
+import { PurchaseForm } from "../features/purchasing/PurchaseForm";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage />, errorElement: <NotFound /> },
@@ -28,6 +29,7 @@ export const router = createBrowserRouter([
       { path: "inventory", element: <InventoryPage /> },
       { path: "inventory/:variantId", element: <StockItemPage /> },
       { path: "purchases", element: <PurchasesPage /> },
+      { path: "purchases/new", element: <PurchaseForm /> },
       // Catch-all INSIDE the shell, so an unknown URL keeps the top rail and a way back,
       // and still sends a signed-out visitor to the login screen through ProtectedRoute.
       { path: "*", element: <NotFound /> },
