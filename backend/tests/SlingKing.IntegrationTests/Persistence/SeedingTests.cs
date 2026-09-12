@@ -32,13 +32,31 @@ public class SeedingTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        // CASCADE reaches the ledger tables that hang off locations and channels. Nothing
-        // is lost: every other integration test creates the rows it needs inside the test
-        // that needs them, and the collection runs its classes one at a time.
+        // The collection runs its classes one at a time, but "one at a time" cuts the
+        // other way from what it looks like: it guarantees some class runs AFTER this
+        // reset and has to live with whatever it leaves behind. number_sequences must be
+        // reset alongside every table that is actually numbered from it — products (the
+        // "product" key) and purchases (the "purchase" key) — or a later class allocates
+        // a code the sequence has already handed out to a still-surviving row and hits
+        // ux_products_code / ux_purchases_number. "order" and "return" exist as keys too,
+        // but nothing in this codebase allocates from them yet, so there is no table to
+        // pair them with.
+        //
+        // CASCADE reaches product_variants (off products) and purchase_items (off
+        // purchases) through their foreign keys, and RESTART IDENTITY resets those
+        // cascaded tables' own id sequences along with the named ones. It does not reach
+        // stock_levels, inventory_transactions or inventory_cost_layers: those are keyed
+        // by variant_id/location_id with no foreign key at all (deliberately, so stock
+        // history survives a deleted product), so once product_variants' identity
+        // restarts at 1 a freshly created variant can reuse an id a stale row still
+        // references — pk_stock_levels collides, or FIFO cost logic reads someone else's
+        // leftover layer. They are named explicitly for that reason; CASCADE off
+        // inventory_cost_layers still picks up inventory_cost_consumptions for free.
         _fixture.Db.ChangeTracker.Clear();
         await _fixture.Db.Database.ExecuteSqlRawAsync(
             "truncate table users, locations, sales_channels, number_sequences, " +
-            "expense_categories restart identity cascade");
+            "expense_categories, products, purchases, stock_levels, inventory_transactions, " +
+            "inventory_cost_layers restart identity cascade");
     }
 
     /// <summary>Leaves nothing tracked behind for the next class sharing this context.</summary>
