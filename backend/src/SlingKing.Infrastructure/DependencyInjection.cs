@@ -29,6 +29,7 @@ public static class DependencyInjection
         services.AddScoped<IProductService, ProductService>();
         services.AddScoped<IStockService, StockService>();
         services.AddScoped<ISupplierService, SupplierService>();
+        services.AddScoped<IPurchaseService, PurchaseService>();
 
         // The seeder takes its two credentials as plain constructor arguments rather than
         // reading configuration itself, so nothing but this line knows where they come from.

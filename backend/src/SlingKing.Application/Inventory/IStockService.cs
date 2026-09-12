@@ -39,4 +39,18 @@ public interface IStockService
 
     /// <summary>Null when the variant does not exist or is retired.</summary>
     Task<StockItemView?> GetAsync(long variantId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Raises stock for every line of a purchase, appending one ledger row and opening one
+    /// cost layer each.
+    /// </summary>
+    /// <remarks>
+    /// Assumes the caller has an open transaction and commits nothing itself, so a purchase
+    /// and the stock it moves land or fail together. This is the ONLY way purchases reach the
+    /// ledger: nothing outside StockService may write physical_qty.
+    /// </remarks>
+    Task ApplyPurchaseAsync(
+        long purchaseId,
+        IReadOnlyList<PurchaseStockLine> lines,
+        CancellationToken cancellationToken = default);
 }

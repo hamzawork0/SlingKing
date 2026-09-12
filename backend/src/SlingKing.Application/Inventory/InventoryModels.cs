@@ -75,3 +75,26 @@ public record StockItemView(
     int LowStockThreshold,
     decimal? StockValue,
     IReadOnlyList<MovementView> Movements);
+
+/// <summary>
+/// What caused a movement, for the paths that have a cause worth recording. Purchases set it
+/// so an item's history can be traced back to what brought the bags in; the manual movement
+/// endpoint passes null, because "you typed it" is not a reference.
+/// </summary>
+/// <param name="SourceId">
+/// Overrides the cost layer's source id, which otherwise points at the ledger row. A purchase
+/// points its layer at the purchase LINE, so a layer names the thing that bought it.
+/// </param>
+/// <param name="TargetLayerId">
+/// Consume this exact layer rather than walking FIFO. Only a purchase cancellation sets it:
+/// it must take back its own bags, and the oldest layer is usually somebody else's.
+/// </param>
+public sealed record MovementContext(
+    InventoryReferenceType ReferenceType,
+    long ReferenceId,
+    long? SourceId = null,
+    long? TargetLayerId = null);
+
+/// <summary>One line of a purchase, as StockService needs it: enough to move stock, no more.</summary>
+public record PurchaseStockLine(
+    long PurchaseItemId, long VariantId, int Quantity, decimal? UnitCost);

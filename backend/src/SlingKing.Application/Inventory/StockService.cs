@@ -110,7 +110,7 @@ public sealed class StockService : IStockService
 
         var movement = await AppendAsync(
             level, input.Type, direction * input.Quantity, input.UnitCost, input.Reason,
-            allowShortfall: false, cancellationToken);
+            allowShortfall: false, context: null, cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
 
@@ -159,11 +159,36 @@ public sealed class StockService : IStockService
             // into line with stock, because the counted number is authoritative by definition.
             // Without this, the disagreement message names a fix that hits the same wall.
             allowShortfall: true,
+            context: null,
             cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
 
         return new RecountResult(previous, countedQuantity, difference, movement);
+    }
+
+    public async Task ApplyPurchaseAsync(
+        long purchaseId,
+        IReadOnlyList<PurchaseStockLine> lines,
+        CancellationToken cancellationToken = default)
+    {
+        var locationId = await DefaultLocationIdAsync(cancellationToken);
+
+        // Ascending variant id, ALWAYS. A multi-line purchase locks several stock rows, and
+        // two purchases touching the same variants in opposite orders deadlock in Postgres —
+        // one waits on a row the other holds, in both directions. The ordering is the whole
+        // defence, and nothing about the code looks wrong when it is missing.
+        foreach (var line in lines.OrderBy(l => l.VariantId))
+        {
+            var level = await LockLevelAsync(line.VariantId, locationId, cancellationToken);
+
+            await AppendAsync(
+                level, InventoryTransactionType.Purchase, line.Quantity, line.UnitCost,
+                reason: null, allowShortfall: false,
+                new MovementContext(
+                    InventoryReferenceType.Purchase, purchaseId, SourceId: line.PurchaseItemId),
+                cancellationToken);
+        }
     }
 
     /// <summary>
@@ -179,6 +204,7 @@ public sealed class StockService : IStockService
         decimal? unitCost,
         string? reason,
         bool allowShortfall,
+        MovementContext? context,
         CancellationToken cancellationToken)
     {
         var now = _clock.UtcNow;
@@ -193,6 +219,8 @@ public sealed class StockService : IStockService
             UnitCost = unitCost,
             TotalCost = unitCost * Math.Abs(signedQuantity),
             Reason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(),
+            ReferenceType = context?.ReferenceType,
+            ReferenceId = context?.ReferenceId,
             OccurredAt = now,
             CreatedAt = now
         };
@@ -208,7 +236,8 @@ public sealed class StockService : IStockService
         if (signedQuantity > 0)
         {
             _db.InventoryCostLayers.Add(FifoCostEngine.AddLayer(
-                level.VariantId, level.LocationId, SourceOf(type), ledgerRow.Id,
+                level.VariantId, level.LocationId, SourceOf(type),
+                context?.SourceId ?? ledgerRow.Id,
                 signedQuantity, unitCost, now));
         }
         else
