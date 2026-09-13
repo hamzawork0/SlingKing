@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using SlingKing.Api.Controllers;
 using Microsoft.EntityFrameworkCore;
@@ -167,7 +168,29 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+// Render terminates TLS and proxies to this container, so every request arrives carrying the
+// proxy's address. The rate limiter partitions on the client IP, so without this the whole
+// internet shares one bucket of login attempts and one person's typos lock everyone else out.
+//
+// Clearing KnownNetworks and KnownProxies is load-bearing: by default the middleware trusts
+// only loopback proxies, so behind Render it would ignore these headers and change NOTHING —
+// installed, running, and silently useless. We cannot know the proxy's address in advance,
+// and only Render can reach this container, so trusting the hop it adds is the available
+// option.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 var app = builder.Build();
+
+// First in the pipeline on purpose: everything downstream that reads the client's address or
+// the request scheme — the rate limiter, the request log — must see the real values rather
+// than the proxy's.
+app.UseForwardedHeaders();
 
 // First in the pipeline, so nothing downstream can hand the client an exception. In
 // Development the framework also inserts its own developer exception page ahead of this
