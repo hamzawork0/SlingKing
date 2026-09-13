@@ -22,7 +22,7 @@ export function NotFound() {
       <p className="mt-2 max-w-prose text-[14px] leading-relaxed text-muted">
         {crashed
           ? "The problem has been logged. Going back to the dashboard is usually enough to carry on."
-          : "Purchases is on its way. Until it lands, Products and Inventory are where the daily work happens."}
+          : "Products and Inventory are where the daily work happens."}
       </p>
 
       <div className="topstitch mt-8" />
