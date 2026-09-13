@@ -28,6 +28,17 @@ export function parseCost(raw: string): number | null {
   return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
+/**
+ * True when a cost box has text in it that parseCost cannot read — comma grouping ("1,200",
+ * the exact style formatInr renders), a negative sign, or plain nonsense. parseCost collapses
+ * that case into the same null it returns for a blank box, so the caller must check the raw
+ * text too: PurchaseForm.handleSubmit refuses to submit when this is true, rather than reading
+ * unparseable text as "left blank" and recording the cost as permanently unknown.
+ */
+export function hasUnparseableCost(raw: string[]): boolean {
+  return raw.some((r) => r.trim() !== "" && parseCost(r) === null);
+}
+
 export function lineTotal(quantity: number | null, unitCost: number | null): number | null {
   if (quantity === null || unitCost === null) return null;
   return quantity * unitCost;

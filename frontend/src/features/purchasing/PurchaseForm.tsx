@@ -4,7 +4,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { recordPurchase } from "../../api/purchasing";
 import { serverMessage } from "../../api/client";
 import { formatInr } from "../../lib/money";
-import { lineTotal, parseCost, parseQuantity, purchaseTotal } from "../../lib/purchaseTotals";
+import {
+  hasUnparseableCost,
+  lineTotal,
+  parseCost,
+  parseQuantity,
+  purchaseTotal,
+} from "../../lib/purchaseTotals";
 import { SupplierSelect } from "./SupplierSelect";
 import { VariantPicker } from "./VariantPicker";
 
@@ -88,6 +94,11 @@ export function PurchaseForm() {
 
     if (lines.some((l) => l.quantity === null)) {
       setError("Enter how many, as a number above zero.");
+      return;
+    }
+
+    if (hasUnparseableCost(rows.map((r) => r.unitCost))) {
+      setError("That cost is not a number. Leave it blank if you do not know it.");
       return;
     }
 

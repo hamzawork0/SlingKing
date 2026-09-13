@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lineTotal, parseCost, parseQuantity, purchaseTotal } from "./purchaseTotals";
+import { hasUnparseableCost, lineTotal, parseCost, parseQuantity, purchaseTotal } from "./purchaseTotals";
 
 describe("parseQuantity", () => {
   it("reads a whole number", () => {
@@ -39,6 +39,31 @@ describe("parseCost", () => {
   it("refuses negatives and nonsense", () => {
     expect(parseCost("-1")).toBeNull();
     expect(parseCost("four fifty")).toBeNull();
+  });
+});
+
+describe("hasUnparseableCost", () => {
+  // The seam: parseCost("1,200") is null for the same reason parseCost("") is null, but only
+  // one of those means "unknown". This is what PurchaseForm.handleSubmit must refuse on.
+  it("flags a comma-grouped cost — the exact formatting formatInr itself renders", () => {
+    expect(hasUnparseableCost(["1,200"])).toBe(true);
+  });
+
+  it("flags a negative cost", () => {
+    expect(hasUnparseableCost(["-500"])).toBe(true);
+  });
+
+  it("does not flag a blank box — that is the deliberate 'unknown' state", () => {
+    expect(hasUnparseableCost([""])).toBe(false);
+    expect(hasUnparseableCost(["   "])).toBe(false);
+  });
+
+  it("does not flag a cost that parses cleanly", () => {
+    expect(hasUnparseableCost(["450.50", "0"])).toBe(false);
+  });
+
+  it("flags the whole set when any one row is bad", () => {
+    expect(hasUnparseableCost(["450", "1,200", ""])).toBe(true);
   });
 });
 
