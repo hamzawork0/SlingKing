@@ -51,7 +51,7 @@ Facts settled by reading rather than by asking:
 |---|---|---|
 | Host | Render, free tier | Standing project constraint: everything free, no paid tooling. |
 | Configuration | `render.yaml` Blueprint in the repo; secrets in the dashboard | The configuration becomes readable, reviewable and restorable. A deleted service is recreated from a file rather than from memory. |
-| Sleeping | An external free cron pings `/api/v1/health` every 10 minutes, around the clock | One request solves both problems: Render's 15-minute idle sleep and Supabase's 7-day pause. The endpoint touches the database, so it wakes both. |
+| Sleeping | An external free cron pings `/api/v1/health` every 10 minutes, **19:00–02:00 IST** | One request solves both problems — the endpoint touches the database, so it wakes Render and unpauses Supabase together. The window matches when the owner actually enters stock, and costs ~225 of 750 free hours instead of ~744. |
 | Backups | Supabase's own daily backups, 7-day window | A shop recording a few purchases a week survives losing at most a day. `backup.ps1` is still run by hand before anything risky. |
 | Deploys | **Manual.** Auto-deploy off | Migrations run on startup, so an automatic deploy would change the client's live database as a side effect of a merge. The click makes it a decision. |
 | Application changes | `UseForwardedHeaders` only | Everything else is configuration. |
@@ -62,7 +62,7 @@ Two Render services plus one external cron.
 
 | Service | Type | Sleeps? | Instance hours |
 |---|---|---|---|
-| `slingking-api` | Web Service (Docker) | kept awake by the pinger | ~744/month |
+| `slingking-api` | Web Service (Docker) | awake 19:00–02:00 IST, asleep otherwise | ~225/month of 750 |
 | `slingking` | Static Site | never | none — static sites do not consume them |
 | Pinger | external cron (cron-job.org or UptimeRobot) | n/a | none |
 
@@ -192,23 +192,60 @@ confusingly.
 
 ### The pinger
 
-A free external cron hits `https://<api>/api/v1/health` every ten minutes,
-around the clock. The endpoint is `[AllowAnonymous]`, so no credential sits in
-a third-party scheduler, and it calls `CanConnectAsync`, so the single request
-keeps Render awake **and** Supabase unpaused.
+A free external cron hits the API's `/api/v1/health` every ten minutes,
+**between 19:00 and 02:00 IST** — the hours the owner actually enters stock.
+The endpoint is `[AllowAnonymous]`, so no credential sits in a third-party
+scheduler, and it calls `CanConnectAsync`, so one request keeps Render awake
+**and** Supabase unpaused.
+
+### Why one window serves two different problems
+
+The two sleep problems need very different frequencies, and pricing both at the
+stricter one is what makes a pinger expensive:
+
+| Problem | Needs a ping | Pattern that satisfies it |
+|---|---|---|
+| Render sleeps after 15 minutes idle | more often than every 15 min | every 10 min, but only while she is working |
+| Supabase pauses after 7 days idle | once a week | any single ping in the window covers it |
+
+So the narrow window is not a compromise on the Supabase half — it satisfies
+that requirement many times over. The only thing given up is an instant
+response during hours nobody is using the app.
+
+### The cost
+
+Render bills instance-hours while the service is **running**, and it stays up
+roughly 15 minutes after the last request. A seven-hour window therefore costs
+the window plus a short tail:
+
+**~7.25 hours/day × 31 ≈ 225 hours a month, against a 750-hour allowance.**
+
+That leaves about **525 hours spare** — room for a second free service later, or
+a bad month, without risking suspension. Contrast around-the-clock pinging,
+which costs ~744 of 750 and leaves the account unable to run anything else.
+
+### The midnight crossing — the detail that will silently half-work
+
+**19:00–02:00 spans midnight, and cron ranges do not wrap.** A schedule written
+as `*/10 19-2 * * *` is either rejected or, worse, quietly interpreted as
+something else. It must be two ranges:
+
+```
+*/10 19-23,0-2 * * *
+```
+
+**The scheduler must be set to Asia/Kolkata**, not UTC. IST is UTC+05:30, so
+the window in UTC is 13:30–20:30 — a half-hour offset that no whole-hour cron
+range expresses correctly. cron-job.org supports per-job timezones; if a
+scheduler offers only UTC, the expression has to become
+`30 13 * * *`-style half-hour steps, which is worth avoiding by choosing a
+scheduler that handles timezones.
+
+### Alerting
 
 **Failure alerts must be switched on.** A pinger that silently stops is worse
 than none, because the app is believed warm right up until the client finds it
 cold.
-
-**The instance-hour budget is tight and must be watched in month one.** Around
-the clock is roughly **744 hours in a 31-day month against a 750-hour
-allowance**. It fits, with almost nothing spare. Two consequences:
-
-- This account can run **exactly one** always-on free web service. A second
-  suspends both.
-- If Render reports the allowance exhausted, the fix is narrowing the ping
-  window — not debugging the application.
 
 Render's free-tier terms should be confirmed on their site before relying on
 these numbers; they may have changed.
@@ -269,7 +306,9 @@ than trusting `.dockerignore` to be correct.
 - A staging environment.
 - **A password-change screen** — a real gap, recorded, not built.
 - Auto-deploy.
-- Any second always-on free service — the instance-hour budget cannot afford one.
+- A second Render service. Not because the budget forbids it — the narrow ping
+  window leaves ~525 hours spare, which is the point of choosing it — but
+  because nothing in this milestone needs one.
 - Moving the database off Supabase.
 
 ## Standing constraints this milestone must honour
