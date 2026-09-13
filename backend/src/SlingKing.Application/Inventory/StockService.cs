@@ -1,5 +1,5 @@
-using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using SlingKing.Application.Catalog;
 using SlingKing.Application.Common;
 using SlingKing.Application.Common.Abstractions;
 using SlingKing.Domain.Catalog;
@@ -60,16 +60,6 @@ public sealed class StockService : IStockService
         }
     }
 
-    /// <summary>
-    /// A variant is reachable only when it and its parent product are both active. A
-    /// retired product must take its variants out of reach everywhere — the list, the item
-    /// page, and both write paths — not just off the list. An <see cref="Expression"/> so it
-    /// composes with <c>Where</c> whether the caller is filtering a set (<see cref="ListAsync"/>)
-    /// or narrowing to one id (everywhere else); EF translates the composed query either way.
-    /// </summary>
-    private static readonly Expression<Func<ProductVariant, bool>> IsReachable =
-        v => v.IsActive && v.Product!.IsActive;
-
     private Task<int> DefaultLocationIdAsync(CancellationToken cancellationToken) =>
         _db.Locations.Where(l => l.IsDefault).Select(l => l.Id).SingleAsync(cancellationToken);
 
@@ -97,7 +87,7 @@ public sealed class StockService : IStockService
 
         var variantExists = await _db.ProductVariants
             .Where(v => v.Id == input.VariantId)
-            .Where(IsReachable)
+            .Where(VariantRules.IsReachable)
             .AnyAsync(cancellationToken);
 
         if (!variantExists)
@@ -120,7 +110,7 @@ public sealed class StockService : IStockService
 
         var movement = await AppendAsync(
             level, input.Type, direction * input.Quantity, input.UnitCost, input.Reason,
-            allowShortfall: false, cancellationToken);
+            allowShortfall: false, context: null, cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
 
@@ -137,7 +127,7 @@ public sealed class StockService : IStockService
 
         var variantExists = await _db.ProductVariants
             .Where(v => v.Id == variantId)
-            .Where(IsReachable)
+            .Where(VariantRules.IsReachable)
             .AnyAsync(cancellationToken);
 
         if (!variantExists)
@@ -169,11 +159,84 @@ public sealed class StockService : IStockService
             // into line with stock, because the counted number is authoritative by definition.
             // Without this, the disagreement message names a fix that hits the same wall.
             allowShortfall: true,
+            context: null,
             cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
 
         return new RecountResult(previous, countedQuantity, difference, movement);
+    }
+
+    public async Task ApplyPurchaseAsync(
+        long purchaseId,
+        IReadOnlyList<PurchaseStockLine> lines,
+        CancellationToken cancellationToken = default)
+    {
+        var locationId = await DefaultLocationIdAsync(cancellationToken);
+
+        // Ascending variant id, ALWAYS. A multi-line purchase locks several stock rows, and
+        // two purchases touching the same variants in opposite orders deadlock in Postgres —
+        // one waits on a row the other holds, in both directions. The ordering is the whole
+        // defence, and nothing about the code looks wrong when it is missing.
+        foreach (var line in lines.OrderBy(l => l.VariantId))
+        {
+            var level = await LockLevelAsync(line.VariantId, locationId, cancellationToken);
+
+            await AppendAsync(
+                level, InventoryTransactionType.Purchase, line.Quantity, line.UnitCost,
+                reason: null, allowShortfall: false,
+                new MovementContext(
+                    InventoryReferenceType.Purchase, purchaseId, SourceId: line.PurchaseItemId),
+                cancellationToken);
+        }
+    }
+
+    public async Task ReversePurchaseAsync(
+        long purchaseId,
+        IReadOnlyList<PurchaseStockLine> lines,
+        CancellationToken cancellationToken = default)
+    {
+        var locationId = await DefaultLocationIdAsync(cancellationToken);
+
+        // Same ascending order as ApplyPurchaseAsync, for the same deadlock reason.
+        foreach (var line in lines.OrderBy(l => l.VariantId))
+        {
+            // Lock first, THEN look up the layer. Both run on this one IAppDbContext, so a
+            // layer read before the lock is held would be handed back from EF's identity map
+            // rather than re-read once we actually hold the row -- letting the "have these bags
+            // already left?" check in ConsumeLayerAsync be evaluated against a snapshot taken
+            // before a concurrent outflow could land. Locking first closes that window.
+            var level = await LockLevelAsync(line.VariantId, locationId, cancellationToken);
+
+            var layer = await _db.InventoryCostLayers.SingleOrDefaultAsync(
+                l => l.SourceType == CostLayerSourceType.Purchase
+                  && l.SourceId == line.PurchaseItemId,
+                cancellationToken)
+                ?? throw AppException.Conflict(
+                    "This purchase's cost records are missing, so it cannot be cancelled. " +
+                    "Record what actually happened on the Inventory screen instead.");
+
+            // Checked here, before AppendAsync touches anything: AppendAsync writes the level's
+            // new physical_qty in the SAME SaveChangesAsync that adds the ledger row, ahead of
+            // ConsumeLayerAsync's own "already left" check. Once some of this layer has already
+            // gone out, subtracting the full purchased quantity can drive physical_qty negative
+            // and trip ck_physical_non_negative at the database -- a raw 500, not our 409. Catching
+            // that PostgresException is off the table (Application must not know Npgsql exists),
+            // so the check has to run before the write, not after it.
+            if (layer.RemainingQty != layer.OriginalQty)
+            {
+                throw AppException.Conflict(
+                    "Some of these bags have already left. " +
+                    "Record what actually happened on the Inventory screen instead.");
+            }
+
+            await AppendAsync(
+                level, InventoryTransactionType.Purchase, -line.Quantity,
+                unitCost: null, reason: null, allowShortfall: false,
+                new MovementContext(
+                    InventoryReferenceType.Purchase, purchaseId, TargetLayerId: layer.Id),
+                cancellationToken);
+        }
     }
 
     /// <summary>
@@ -189,6 +252,7 @@ public sealed class StockService : IStockService
         decimal? unitCost,
         string? reason,
         bool allowShortfall,
+        MovementContext? context,
         CancellationToken cancellationToken)
     {
         var now = _clock.UtcNow;
@@ -203,6 +267,8 @@ public sealed class StockService : IStockService
             UnitCost = unitCost,
             TotalCost = unitCost * Math.Abs(signedQuantity),
             Reason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(),
+            ReferenceType = context?.ReferenceType,
+            ReferenceId = context?.ReferenceId,
             OccurredAt = now,
             CreatedAt = now
         };
@@ -218,8 +284,14 @@ public sealed class StockService : IStockService
         if (signedQuantity > 0)
         {
             _db.InventoryCostLayers.Add(FifoCostEngine.AddLayer(
-                level.VariantId, level.LocationId, SourceOf(type), ledgerRow.Id,
+                level.VariantId, level.LocationId, SourceOf(type),
+                context?.SourceId ?? ledgerRow.Id,
                 signedQuantity, unitCost, now));
+        }
+        else if (context?.TargetLayerId is long targetLayerId)
+        {
+            await ConsumeLayerAsync(
+                ledgerRow, targetLayerId, -signedQuantity, now, cancellationToken);
         }
         else
         {
@@ -234,10 +306,53 @@ public sealed class StockService : IStockService
             ledgerRow.PhysicalDelta, ledgerRow.TotalCost, ledgerRow.Reason);
     }
 
-    private static CostLayerSourceType SourceOf(InventoryTransactionType type) =>
-        type == InventoryTransactionType.OpeningStock
-            ? CostLayerSourceType.OpeningStock
-            : CostLayerSourceType.AdjustmentIn;
+    private static CostLayerSourceType SourceOf(InventoryTransactionType type) => type switch
+    {
+        InventoryTransactionType.OpeningStock => CostLayerSourceType.OpeningStock,
+        InventoryTransactionType.Purchase => CostLayerSourceType.Purchase,
+        // Everything else that lays a layer is a recount adjusting upward.
+        _ => CostLayerSourceType.AdjustmentIn
+    };
+
+    /// <summary>
+    /// Takes <paramref name="quantity"/> out of ONE named layer instead of walking FIFO. Only
+    /// a purchase cancellation uses this: it must take back the bags that purchase brought in,
+    /// and the oldest layer is usually a different purchase's. Running a cancellation through
+    /// the FIFO path leaves every quantity correct and every cost quietly wrong.
+    /// </summary>
+    private async Task ConsumeLayerAsync(
+        InventoryTransaction ledgerRow,
+        long layerId,
+        int quantity,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var layer = await _db.InventoryCostLayers
+            .SingleAsync(l => l.Id == layerId, cancellationToken);
+
+        if (layer.RemainingQty != layer.OriginalQty)
+        {
+            throw AppException.Conflict(
+                "Some of these bags have already left. " +
+                "Record what actually happened on the Inventory screen instead.");
+        }
+
+        layer.RemainingQty -= quantity;
+
+        _db.InventoryCostConsumptions.Add(new InventoryCostConsumption
+        {
+            CostLayerId = layer.Id,
+            InventoryTransactionId = ledgerRow.Id,
+            Quantity = quantity,
+            ReversedQty = 0,
+            UnitCost = layer.UnitCost,
+            TotalCost = layer.UnitCost * quantity,
+            ConsumedAt = now
+        });
+
+        ledgerRow.UnitCost = layer.UnitCost;
+        ledgerRow.TotalCost = layer.UnitCost * quantity;
+    }
 
     private async Task ConsumeAsync(
         StockLevel level,
@@ -294,7 +409,7 @@ public sealed class StockService : IStockService
 
         var query = _db.ProductVariants
             .AsNoTracking()
-            .Where(IsReachable);
+            .Where(VariantRules.IsReachable);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -345,7 +460,7 @@ public sealed class StockService : IStockService
         var header = await _db.ProductVariants
             .AsNoTracking()
             .Where(v => v.Id == variantId)
-            .Where(IsReachable)
+            .Where(VariantRules.IsReachable)
             .Select(v => new StockRow(
                 v.Id,
                 v.Sku,

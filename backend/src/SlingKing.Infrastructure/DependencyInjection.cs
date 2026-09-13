@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SlingKing.Application.Catalog;
 using SlingKing.Application.Common.Abstractions;
 using SlingKing.Application.Inventory;
+using SlingKing.Application.Purchasing;
 using SlingKing.Infrastructure.Auth;
 using SlingKing.Infrastructure.Persistence;
 using SlingKing.Infrastructure.Persistence.Seed;
@@ -27,6 +28,8 @@ public static class DependencyInjection
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<IProductService, ProductService>();
         services.AddScoped<IStockService, StockService>();
+        services.AddScoped<ISupplierService, SupplierService>();
+        services.AddScoped<IPurchaseService, PurchaseService>();
 
         // The seeder takes its two credentials as plain constructor arguments rather than
         // reading configuration itself, so nothing but this line knows where they come from.

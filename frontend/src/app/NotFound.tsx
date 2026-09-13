@@ -17,12 +17,12 @@ export function NotFound() {
         {crashed ? "Something broke" : "Not here"}
       </p>
       <h1 className="font-display mt-1 text-[28px] font-bold tracking-tight">
-        {crashed ? "This screen failed to load" : "This page does not exist yet"}
+        {crashed ? "This screen failed to load" : "This page does not exist"}
       </h1>
       <p className="mt-2 max-w-prose text-[14px] leading-relaxed text-muted">
         {crashed
           ? "The problem has been logged. Going back to the dashboard is usually enough to carry on."
-          : "Purchases is on its way. Until it lands, Products and Inventory are where the daily work happens."}
+          : "Products, Inventory, and Purchases are where the daily work happens."}
       </p>
 
       <div className="topstitch mt-8" />
