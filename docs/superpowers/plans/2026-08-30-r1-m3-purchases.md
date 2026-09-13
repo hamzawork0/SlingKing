@@ -104,13 +104,13 @@ Three small preparatory changes with no new behaviour. The existing suite is the
   `StockService.SourceOf` maps `InventoryTransactionType.Purchase` to
   `CostLayerSourceType.Purchase`.
 
-- [ ] **Step 1: Capture the current test count**
+- [x] **Step 1: Capture the current test count**
 
 Run: `cd backend; dotnet test 2>&1 | Select-String -Pattern "Passed!|Failed!"`
 
 Write the numbers down. Expect roughly 118 integration and 78 unit. Task 1 must not change either. If the suite is not green before you start, stop and report that — do not begin a refactor on a red suite.
 
-- [ ] **Step 2: Create the shared rule**
+- [x] **Step 2: Create the shared rule**
 
 Create `backend/src/SlingKing.Application/Catalog/VariantRules.cs`:
 
@@ -142,7 +142,7 @@ public static class VariantRules
 }
 ```
 
-- [ ] **Step 3: Point StockService at it**
+- [x] **Step 3: Point StockService at it**
 
 In `backend/src/SlingKing.Application/Inventory/StockService.cs`:
 
@@ -151,7 +151,7 @@ In `backend/src/SlingKing.Application/Inventory/StockService.cs`:
 - Replace every `.Where(IsReachable)` with `.Where(VariantRules.IsReachable)`. There are three call sites — `RecordMovementAsync`, `RecountAsync` and `GetAsync` — plus one in `ListAsync`. Verify with a grep that none is missed.
 - Remove `using System.Linq.Expressions;` if nothing else in the file needs it. If the build warns about an unused using under `-warnaserror`, that is the signal.
 
-- [ ] **Step 4: Teach SourceOf about purchases**
+- [x] **Step 4: Teach SourceOf about purchases**
 
 Still in `StockService.cs`, replace `SourceOf` with:
 
@@ -165,7 +165,7 @@ Still in `StockService.cs`, replace `SourceOf` with:
     };
 ```
 
-- [ ] **Step 5: Correct the misleading domain comment**
+- [x] **Step 5: Correct the misleading domain comment**
 
 In `backend/src/SlingKing.Domain/Purchasing/Purchase.cs`, the `TotalAmount` property carries:
 
@@ -185,19 +185,19 @@ That describes a partial sum, which understates what was actually paid and reads
 
 Change nothing else in `SlingKing.Domain`.
 
-- [ ] **Step 6: Verify nothing still names the old private rule**
+- [x] **Step 6: Verify nothing still names the old private rule**
 
 Run: `cd backend; Select-String -Path "src\*\**\*.cs" -Pattern "IsReachable" | Select-String -NotMatch "VariantRules"`
 
 Expected: no matches outside `VariantRules.cs` itself. Hits under `bin/` or `obj/` are stale build artefacts and do not count.
 
-- [ ] **Step 7: Build and run the full suite**
+- [x] **Step 7: Build and run the full suite**
 
 Run: `cd backend; dotnet build -warnaserror; if ($?) { dotnet test }`
 
 Expected: build clean with zero warnings, and **exactly the same pass count as Step 1**. A changed count means this was not a pure refactor.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add backend/src
@@ -229,7 +229,7 @@ The rule this task exists to enforce: **a purchase total is null when any line's
   - `static decimal? PurchaseTotals.Total(IReadOnlyList<PurchaseLineInput> lines)`
   - `static void PurchaseTotals.RejectDuplicateVariants(IReadOnlyList<PurchaseLineInput> lines, IReadOnlyDictionary<long, string> labels)`
 
-- [ ] **Step 1: Write the models**
+- [x] **Step 1: Write the models**
 
 Create `backend/src/SlingKing.Application/Purchasing/PurchaseModels.cs`:
 
@@ -244,7 +244,7 @@ namespace SlingKing.Application.Purchasing;
 public record PurchaseLineInput(long VariantId, int Quantity, decimal? UnitCost);
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 Create `backend/tests/SlingKing.UnitTests/Purchasing/PurchaseTotalsTests.cs`:
 
@@ -342,13 +342,13 @@ public class PurchaseTotalsTests
 }
 ```
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
 Run: `cd backend; dotnet test tests/SlingKing.UnitTests --filter FullyQualifiedName~PurchaseTotalsTests`
 
 Expected: the project does not compile — `PurchaseTotals` does not exist. That is the correct failure. Do not proceed until you have seen it.
 
-- [ ] **Step 4: Write the helper**
+- [x] **Step 4: Write the helper**
 
 Create `backend/src/SlingKing.Application/Purchasing/PurchaseTotals.cs`:
 
@@ -407,13 +407,13 @@ public static class PurchaseTotals
 }
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `cd backend; dotnet test tests/SlingKing.UnitTests --filter FullyQualifiedName~PurchaseTotalsTests`
 
 Expected: 9 passed.
 
-- [ ] **Step 6: Prove the all-or-nothing total is load-bearing**
+- [x] **Step 6: Prove the all-or-nothing total is load-bearing**
 
 Temporarily change `Total` to sum only the lines it knows:
 
@@ -425,7 +425,7 @@ Run the same filter. Expected: `One_unknown_cost_makes_the_whole_total_unknown` 
 
 **Then restore `Total` exactly as written above and re-run — 9 passed.** This is the rule the whole milestone's honesty about money rests on, and a guard never seen to fail is decoration.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/src/SlingKing.Application/Purchasing backend/tests/SlingKing.UnitTests/Purchasing
@@ -461,7 +461,7 @@ Three endpoints that are the category endpoints with a different noun. Build the
   - `Task<SupplierOption> ISupplierService.UpdateAsync(int id, string name, string? phone, CancellationToken)`
   - `GET/POST /api/v1/suppliers`, `PUT /api/v1/suppliers/{id}`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `backend/tests/SlingKing.IntegrationTests/Api/SupplierEndpointTests.cs`:
 
@@ -645,13 +645,13 @@ public class SupplierEndpointTests : IClassFixture<SlingKingApiFactory>, IAsyncL
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend; dotnet test tests/SlingKing.IntegrationTests --filter FullyQualifiedName~SupplierEndpointTests`
 
 Expected: compile failure or 404s — there is no endpoint yet.
 
-- [ ] **Step 3: Add the option model**
+- [x] **Step 3: Add the option model**
 
 Append to `backend/src/SlingKing.Application/Purchasing/PurchaseModels.cs`:
 
@@ -659,7 +659,7 @@ Append to `backend/src/SlingKing.Application/Purchasing/PurchaseModels.cs`:
 public record SupplierOption(int Id, string Name, string? Phone);
 ```
 
-- [ ] **Step 4: Write the interface**
+- [x] **Step 4: Write the interface**
 
 Create `backend/src/SlingKing.Application/Purchasing/ISupplierService.cs`:
 
@@ -686,7 +686,7 @@ public interface ISupplierService
 }
 ```
 
-- [ ] **Step 5: Write the service**
+- [x] **Step 5: Write the service**
 
 Create `backend/src/SlingKing.Application/Purchasing/SupplierService.cs`:
 
@@ -781,7 +781,7 @@ public sealed class SupplierService : ISupplierService
 }
 ```
 
-- [ ] **Step 6: Write the request contract**
+- [x] **Step 6: Write the request contract**
 
 Create `backend/src/SlingKing.Api/Contracts/Purchasing/PurchasingContracts.cs`:
 
@@ -797,7 +797,7 @@ public record SupplierRequest(
     [MaxLength(32)] string? Phone);
 ```
 
-- [ ] **Step 7: Write the controller**
+- [x] **Step 7: Write the controller**
 
 Create `backend/src/SlingKing.Api/Controllers/SuppliersController.cs`:
 
@@ -864,7 +864,7 @@ public class SuppliersController : ControllerBase
 }
 ```
 
-- [ ] **Step 8: Register the service**
+- [x] **Step 8: Register the service**
 
 In `backend/src/SlingKing.Infrastructure/DependencyInjection.cs`, immediately after the `services.AddScoped<IStockService, StockService>();` line, add:
 
@@ -874,13 +874,13 @@ In `backend/src/SlingKing.Infrastructure/DependencyInjection.cs`, immediately af
 
 Add `using SlingKing.Application.Purchasing;` to the file's usings.
 
-- [ ] **Step 9: Run the tests to verify they pass**
+- [x] **Step 9: Run the tests to verify they pass**
 
 Run: `cd backend; dotnet test tests/SlingKing.IntegrationTests --filter FullyQualifiedName~SupplierEndpointTests`
 
 Expected: 9 passed.
 
-- [ ] **Step 10: Prove the self-collision guard is load-bearing**
+- [x] **Step 10: Prove the self-collision guard is load-bearing**
 
 Temporarily delete `s.Id != id &&` from `UpdateAsync`'s duplicate check and re-run.
 
@@ -888,7 +888,7 @@ Expected: `Correcting_only_the_capitalisation_of_a_name_is_allowed` and `A_suppl
 
 **Then restore it and re-run — 9 passed.**
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add backend/src backend/tests
@@ -930,7 +930,7 @@ The write path. `PurchaseService` owns the transaction and the purchase rows; `S
   - `Task<PurchaseView> IPurchaseService.RecordAsync(PurchaseInput, CancellationToken)`
   - `POST /api/v1/purchases`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `backend/tests/SlingKing.IntegrationTests/Api/PurchaseEndpointTests.cs`. Later tasks add to this file; this step establishes it with its helpers.
 
@@ -1315,13 +1315,13 @@ public class PurchaseEndpointTests : IClassFixture<SlingKingApiFactory>, IAsyncL
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend; dotnet test tests/SlingKing.IntegrationTests --filter FullyQualifiedName~PurchaseEndpointTests`
 
 Expected: compile failure or 404s — there is no purchases endpoint yet.
 
-- [ ] **Step 3: Add the movement context**
+- [x] **Step 3: Add the movement context**
 
 Append to `backend/src/SlingKing.Application/Inventory/InventoryModels.cs`:
 
@@ -1350,7 +1350,7 @@ public record PurchaseStockLine(
     long PurchaseItemId, long VariantId, int Quantity, decimal? UnitCost);
 ```
 
-- [ ] **Step 4: Thread the context through `AppendAsync`**
+- [x] **Step 4: Thread the context through `AppendAsync`**
 
 In `backend/src/SlingKing.Application/Inventory/StockService.cs`, change `AppendAsync`'s signature to take a context immediately before the cancellation token:
 
@@ -1384,7 +1384,7 @@ and change the layer's source id so a caller can override it:
 
 Both existing callers — `RecordMovementAsync` and `RecountAsync` — pass `context: null`. Add that argument to both; do not change anything else about them.
 
-- [ ] **Step 5: Add `ApplyPurchaseAsync` to the interface**
+- [x] **Step 5: Add `ApplyPurchaseAsync` to the interface**
 
 Add to `backend/src/SlingKing.Application/Inventory/IStockService.cs`:
 
@@ -1404,7 +1404,7 @@ Add to `backend/src/SlingKing.Application/Inventory/IStockService.cs`:
         CancellationToken cancellationToken = default);
 ```
 
-- [ ] **Step 6: Implement it**
+- [x] **Step 6: Implement it**
 
 Add to `StockService`, after `RecountAsync`:
 
@@ -1434,7 +1434,7 @@ Add to `StockService`, after `RecountAsync`:
     }
 ```
 
-- [ ] **Step 7: Add the purchase models**
+- [x] **Step 7: Add the purchase models**
 
 Append to `backend/src/SlingKing.Application/Purchasing/PurchaseModels.cs`:
 
@@ -1473,7 +1473,7 @@ public record PurchaseView(
 
 Add `using SlingKing.Domain.Common;` at the top of the file for `PurchaseStatus`.
 
-- [ ] **Step 8: Write the service interface**
+- [x] **Step 8: Write the service interface**
 
 Create `backend/src/SlingKing.Application/Purchasing/IPurchaseService.cs`:
 
@@ -1498,7 +1498,7 @@ public interface IPurchaseService
 }
 ```
 
-- [ ] **Step 9: Write the service**
+- [x] **Step 9: Write the service**
 
 Create `backend/src/SlingKing.Application/Purchasing/PurchaseService.cs`:
 
@@ -1672,7 +1672,7 @@ public sealed class PurchaseService : IPurchaseService
 }
 ```
 
-- [ ] **Step 10: Add the request contracts**
+- [x] **Step 10: Add the request contracts**
 
 Append to `backend/src/SlingKing.Api/Contracts/Purchasing/PurchasingContracts.cs`:
 
@@ -1689,7 +1689,7 @@ public record PurchaseRequest(
     List<PurchaseLineRequest>? Lines);
 ```
 
-- [ ] **Step 11: Write the controller**
+- [x] **Step 11: Write the controller**
 
 Create `backend/src/SlingKing.Api/Controllers/PurchasesController.cs`:
 
@@ -1735,7 +1735,7 @@ public class PurchasesController : ControllerBase
 }
 ```
 
-- [ ] **Step 12: Register the service**
+- [x] **Step 12: Register the service**
 
 In `backend/src/SlingKing.Infrastructure/DependencyInjection.cs`, after the `ISupplierService` registration, add:
 
@@ -1743,13 +1743,13 @@ In `backend/src/SlingKing.Infrastructure/DependencyInjection.cs`, after the `ISu
         services.AddScoped<IPurchaseService, PurchaseService>();
 ```
 
-- [ ] **Step 13: Run the tests to verify they pass**
+- [x] **Step 13: Run the tests to verify they pass**
 
 Run: `cd backend; dotnet test tests/SlingKing.IntegrationTests --filter FullyQualifiedName~PurchaseEndpointTests`
 
 Expected: 12 passed.
 
-- [ ] **Step 14: Prove the back-dating rule is load-bearing**
+- [x] **Step 14: Prove the back-dating rule is load-bearing**
 
 Temporarily change `AppendAsync` to stamp the layer's `ReceivedAt` from the purchase date. The quickest way: in `ApplyPurchaseAsync`, there is no purchase date available — which is itself the point. To simulate the bug, temporarily change `FifoCostEngine.AddLayer`'s `ReceivedAt = now` to `ReceivedAt = now.AddMonths(-2)` and re-run.
 
@@ -1757,13 +1757,13 @@ Expected: `Back_dating_a_purchase_does_not_move_it_ahead_in_the_cost_queue` FAIL
 
 **Then restore `ReceivedAt = now` and re-run — 12 passed.** This is the rule that keeps insertion order equal to FIFO order, and with it the guarantee that no recorded cost is ever retroactively wrong.
 
-- [ ] **Step 15: Run the whole backend suite**
+- [x] **Step 15: Run the whole backend suite**
 
 Run: `cd backend; dotnet build -warnaserror; if ($?) { dotnet test }`
 
 Expected: everything green, zero warnings. The two existing `AppendAsync` callers now pass `context: null`; nothing about M2b's behaviour should have moved.
 
-- [ ] **Step 16: Commit**
+- [x] **Step 16: Commit**
 
 ```bash
 git add backend/src backend/tests
@@ -1793,7 +1793,7 @@ The equivalent of M2b's row-lock test, and weaker by nature. Read the caveat in 
 - Consumes: `POST /api/v1/purchases` (Task 4), `POST /api/v1/suppliers` (Task 3), `SlingKingApiFactory`.
 - Produces: nothing.
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 Create `backend/tests/SlingKing.IntegrationTests/Persistence/PurchaseConcurrencyTests.cs`:
 
@@ -1912,13 +1912,13 @@ public class PurchaseConcurrencyTests : IClassFixture<SlingKingApiFactory>, IAsy
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it passes**
+- [x] **Step 2: Run the test to verify it passes**
 
 Run: `cd backend; dotnet test tests/SlingKing.IntegrationTests --filter FullyQualifiedName~PurchaseConcurrencyTests`
 
 Expected: 1 passed.
 
-- [ ] **Step 3: Try to prove the ordering is load-bearing — and report honestly**
+- [x] **Step 3: Try to prove the ordering is load-bearing — and report honestly**
 
 In `StockService.ApplyPurchaseAsync`, temporarily remove the `.OrderBy(l => l.VariantId)` so lines lock in the order they arrive. Run the test **at least five times**.
 
@@ -1935,7 +1935,7 @@ The second outcome is an acceptable result. A quietly green test implying proof 
 
 **Then restore `.OrderBy(l => l.VariantId)` and re-run — 1 passed.**
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add backend/tests
@@ -1971,7 +1971,7 @@ The subtle one. Cancellation must take back its own bags, and its layers are usu
   - `Task<PurchaseView> IPurchaseService.CancelAsync(long id, CancellationToken)`
   - `POST /api/v1/purchases/{id}/cancel`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `PurchaseEndpointTests.cs`, inside the class:
 
@@ -2140,13 +2140,13 @@ Append to `PurchaseEndpointTests.cs`, inside the class:
     }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend; dotnet test tests/SlingKing.IntegrationTests --filter FullyQualifiedName~PurchaseEndpointTests`
 
 Expected: the six new tests fail with 404 — there is no cancel route.
 
-- [ ] **Step 3: Add targeted consumption to `StockService`**
+- [x] **Step 3: Add targeted consumption to `StockService`**
 
 In `StockService.cs`, add a method beside `ConsumeAsync`:
 
@@ -2214,7 +2214,7 @@ Then, in `AppendAsync`, replace the outflow branch so a targeted layer wins over
         }
 ```
 
-- [ ] **Step 4: Add `ReversePurchaseAsync`**
+- [x] **Step 4: Add `ReversePurchaseAsync`**
 
 Add to `IStockService`:
 
@@ -2267,7 +2267,7 @@ And to `StockService`, after `ApplyPurchaseAsync`:
     }
 ```
 
-- [ ] **Step 5: Add `CancelAsync`**
+- [x] **Step 5: Add `CancelAsync`**
 
 Add to `IPurchaseService`:
 
@@ -2318,7 +2318,7 @@ And to `PurchaseService`:
     }
 ```
 
-- [ ] **Step 6: Add the route**
+- [x] **Step 6: Add the route**
 
 Add to `PurchasesController`:
 
@@ -2331,13 +2331,13 @@ Add to `PurchasesController`:
         Ok(await _purchases.CancelAsync(id, cancellationToken));
 ```
 
-- [ ] **Step 7: Run the tests to verify they pass**
+- [x] **Step 7: Run the tests to verify they pass**
 
 Run: `cd backend; dotnet test tests/SlingKing.IntegrationTests --filter FullyQualifiedName~PurchaseEndpointTests`
 
 Expected: 18 passed.
 
-- [ ] **Step 8: Prove the targeted consumption is load-bearing**
+- [x] **Step 8: Prove the targeted consumption is load-bearing**
 
 In `AppendAsync`, temporarily delete the `else if (context?.TargetLayerId is long targetLayerId)` branch so cancellation falls through to the FIFO path. Re-run.
 
@@ -2345,13 +2345,13 @@ Expected: `Cancelling_takes_back_its_own_layer_not_the_oldest` FAILS — the old
 
 **Then restore the branch and re-run — 18 passed.**
 
-- [ ] **Step 9: Run the whole backend suite**
+- [x] **Step 9: Run the whole backend suite**
 
 Run: `cd backend; dotnet build -warnaserror; if ($?) { dotnet test }`
 
 Expected: everything green, zero warnings.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add backend/src backend/tests
@@ -2383,7 +2383,7 @@ A pure read. The list carries each purchase's lines, so there is no detail endpo
 - Consumes: `ViewAsync` and `PurchaseView` (Task 4).
 - Produces: `Task<IReadOnlyList<PurchaseView>> IPurchaseService.ListAsync(string? search, bool includeCancelled, CancellationToken)` and `GET /api/v1/purchases?search=&includeCancelled=`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `PurchaseEndpointTests.cs`:
 
@@ -2491,13 +2491,13 @@ Append to `PurchaseEndpointTests.cs`:
     }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend; dotnet test tests/SlingKing.IntegrationTests --filter FullyQualifiedName~PurchaseEndpointTests`
 
 Expected: the six new tests fail — there is no list route.
 
-- [ ] **Step 3: Add the interface method**
+- [x] **Step 3: Add the interface method**
 
 Add to `IPurchaseService`:
 
@@ -2514,7 +2514,7 @@ Add to `IPurchaseService`:
         string? search, bool includeCancelled, CancellationToken cancellationToken = default);
 ```
 
-- [ ] **Step 4: Implement it**
+- [x] **Step 4: Implement it**
 
 Add to `PurchaseService`:
 
@@ -2562,7 +2562,7 @@ Add to `PurchaseService`:
     }
 ```
 
-- [ ] **Step 5: Add the route**
+- [x] **Step 5: Add the route**
 
 Add to `PurchasesController`:
 
@@ -2576,19 +2576,19 @@ Add to `PurchasesController`:
         Ok(await _purchases.ListAsync(search, includeCancelled, cancellationToken));
 ```
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `cd backend; dotnet test tests/SlingKing.IntegrationTests --filter FullyQualifiedName~PurchaseEndpointTests`
 
 Expected: 24 passed.
 
-- [ ] **Step 7: Run the whole backend suite**
+- [x] **Step 7: Run the whole backend suite**
 
 Run: `cd backend; dotnet build -warnaserror; if ($?) { dotnet test }`
 
 Expected: everything green, zero warnings.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add backend/src backend/tests
@@ -2615,7 +2615,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Consumes: `api` and `serverMessage` from `frontend/src/api/client.ts`; `formatInr` from `frontend/src/lib/money.ts`.
 - Produces: `listSuppliers`, `createSupplier`, `updateSupplier`, `listPurchases`, `recordPurchase`, `cancelPurchase`, the types `SupplierOption`, `PurchaseLineView`, `PurchaseView`, `PurchasePayload`; `parseQuantity`, `parseCost`, `lineTotal`, `purchaseTotal`; and the `SupplierSelect` component.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `frontend/src/lib/purchaseTotals.test.ts`:
 
@@ -2709,13 +2709,13 @@ describe("purchaseTotal", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd frontend; npx vitest run src/lib/purchaseTotals.test.ts`
 
 Expected: failure resolving `./purchaseTotals` — the module does not exist.
 
-- [ ] **Step 3: Write the pure helpers**
+- [x] **Step 3: Write the pure helpers**
 
 Create `frontend/src/lib/purchaseTotals.ts`:
 
@@ -2772,13 +2772,13 @@ export function purchaseTotal(lines: DraftLine[]): number | null {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd frontend; npx vitest run src/lib/purchaseTotals.test.ts`
 
 Expected: 14 passed.
 
-- [ ] **Step 5: Write the API layer**
+- [x] **Step 5: Write the API layer**
 
 Create `frontend/src/api/purchasing.ts`:
 
@@ -2868,7 +2868,7 @@ export async function cancelPurchase(id: number): Promise<PurchaseView> {
 }
 ```
 
-- [ ] **Step 6: Write the supplier picker**
+- [x] **Step 6: Write the supplier picker**
 
 Create `frontend/src/features/purchasing/SupplierSelect.tsx`. This is `CategorySelect` with a phone field — read `frontend/src/features/catalog/CategorySelect.tsx` first and keep its shape:
 
@@ -3020,13 +3020,13 @@ export function SupplierSelect({
 }
 ```
 
-- [ ] **Step 7: Type-check and lint**
+- [x] **Step 7: Type-check and lint**
 
 Run: `cd frontend; npx tsc -b; if ($?) { npm run lint }`
 
 Expected: both clean. `SupplierSelect` is not yet rendered anywhere; that is fine, Task 10 uses it.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add frontend/src
@@ -3051,7 +3051,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Consumes: `listPurchases`, `cancelPurchase`, `PurchaseView` (Task 8); `formatInr` from `frontend/src/lib/money.ts`; `formatIstDate` from `frontend/src/lib/dates.ts`; `serverMessage`.
 - Produces: the `/purchases` route.
 
-- [ ] **Step 1: Write the screen**
+- [x] **Step 1: Write the screen**
 
 Create `frontend/src/features/purchasing/PurchasesPage.tsx`. Read `frontend/src/features/catalog/ProductsPage.tsx` first — this is the same shape, including the expand-on-click row and the confirmation before a destructive-looking action.
 
@@ -3252,7 +3252,7 @@ export function PurchasesPage() {
 }
 ```
 
-- [ ] **Step 2: Add the route**
+- [x] **Step 2: Add the route**
 
 In `frontend/src/app/router.tsx`, add the import and the route **above** the `path: "*"` catch-all — anything after it is unreachable:
 
@@ -3264,13 +3264,13 @@ import { PurchasesPage } from "../features/purchasing/PurchasesPage";
       { path: "purchases", element: <PurchasesPage /> },
 ```
 
-- [ ] **Step 3: Type-check and lint**
+- [x] **Step 3: Type-check and lint**
 
 Run: `cd frontend; npx tsc -b; if ($?) { npm run lint; if ($?) { npx vitest run } }`
 
 Expected: all clean; 32 vitest tests (18 existing plus the 14 from Task 8).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src
@@ -3298,7 +3298,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **The variant picker needs no new endpoint.** `GET /api/v1/inventory` already returns exactly one row per usable variant, carrying `variantId`, `sku`, `productName`, `colour` and `size` — and it already filters to variants whose product is active, which is the same set a purchase may reference. Reuse `listStock("", false)` rather than adding a variants endpoint.
 
-- [ ] **Step 1: Write the variant picker**
+- [x] **Step 1: Write the variant picker**
 
 Create `frontend/src/features/purchasing/VariantPicker.tsx`:
 
@@ -3414,7 +3414,7 @@ export function VariantPicker({
 }
 ```
 
-- [ ] **Step 2: Write the form**
+- [x] **Step 2: Write the form**
 
 Create `frontend/src/features/purchasing/PurchaseForm.tsx`. Read `frontend/src/features/catalog/ProductForm.tsx` first — the shared `field` class, `role="alert"` errors, and hooks before any early return all come from there.
 
@@ -3677,7 +3677,7 @@ export function PurchaseForm() {
 }
 ```
 
-- [ ] **Step 3: Add the route**
+- [x] **Step 3: Add the route**
 
 In `frontend/src/app/router.tsx`, add the import and the route **above** the `path: "*"` catch-all:
 
@@ -3689,13 +3689,13 @@ import { PurchaseForm } from "../features/purchasing/PurchaseForm";
       { path: "purchases/new", element: <PurchaseForm /> },
 ```
 
-- [ ] **Step 4: Run the frontend checks**
+- [x] **Step 4: Run the frontend checks**
 
 Run: `cd frontend; npx tsc -b; if ($?) { npm run lint; if ($?) { npx vitest run } }`
 
 Expected: type-check clean, lint clean, 32 vitest tests passing.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src
@@ -3720,11 +3720,11 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Consumes: everything.
 - Produces: the milestone.
 
-- [ ] **Step 1: Retire the last promise on the not-found page**
+- [x] **Step 1: Retire the last promise on the not-found page**
 
 `frontend/src/app/NotFound.tsx` currently says Purchases is on its way and points at Products and Inventory as where the daily work happens. Purchases now exists, so the page has nothing left to promise. Rewrite that sentence as a plain not-found line in the page's existing voice — calm, second person, no exclamation marks. Change nothing else: not the heading, not the "Not here" label, not the markup, not the link.
 
-- [ ] **Step 2: Run everything**
+- [x] **Step 2: Run everything**
 
 Run: `cd backend; dotnet build -warnaserror; if ($?) { dotnet test }`
 
@@ -3734,13 +3734,13 @@ Run: `cd frontend; npx tsc -b; if ($?) { npm run lint; if ($?) { npx vitest run 
 
 Expected: all clean, 32 tests passing.
 
-- [ ] **Step 3: Confirm no migration crept in**
+- [x] **Step 3: Confirm no migration crept in**
 
 Run: `git diff --name-only main -- backend/src/SlingKing.Infrastructure/Migrations`
 
 Expected: no output. The schema was complete before this milestone started, and `SchemaConstraintTests` still asserts 28 tables — which Step 2 has already shown.
 
-- [ ] **Step 4: Start the app**
+- [x] **Step 4: Start the app**
 
 Run these in two background shells:
 
@@ -3751,7 +3751,7 @@ cd frontend && npm run dev
 
 The API listens on `http://localhost:5197`; Vite serves `http://localhost:5173`. **Vite must be on 5173** — it is the only origin in the API's CORS allowlist, and if a stale process holds the port Vite silently moves to 5174 and every request fails as a CORS error that looks like the server being down. Check the port it prints before going further.
 
-- [ ] **Step 5: Probe the stub before trusting the browser**
+- [x] **Step 5: Probe the stub before trusting the browser**
 
 Run:
 
@@ -3762,7 +3762,7 @@ curl.exe -s -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer garbage" 
 
 Expected: `401` from both. If either returns 200, the session you are about to test is not authenticated the way you think it is, and every result after it is worthless.
 
-- [ ] **Step 6: Walk it in Playwright**
+- [x] **Step 6: Walk it in Playwright**
 
 Sign in with a **throwaway** account: start the API with `SLINGKING_SEED_ADMIN_EMAIL` and `SLINGKING_SEED_ADMIN_PASSWORD` set to values you invent for this run. The seeder keys on email, so this adds an account without touching the owner's. **Never type the owner's real password into a tool call, and never print `backend/.env`.**
 
@@ -3782,15 +3782,15 @@ Then, against the real API:
 
 Take a screenshot of the expanded purchases list and keep it with the task notes.
 
-- [ ] **Step 7: Check the browser console**
+- [x] **Step 7: Check the browser console**
 
 Read the console for the whole walkthrough. Expected: no errors, no React warnings, no unhandled rejections. The 409s from the deliberate refusals in steps 6 and 7 are expected and correct.
 
-- [ ] **Step 8: Clean up**
+- [x] **Step 8: Clean up**
 
 Stop both background shells — leaving them running holds Supabase pooler connections out of a cap of fifteen. Retire the disposable product, delete the throwaway user and its refresh tokens, and remove any screenshots from the repository root.
 
-- [ ] **Step 9: Request a whole-branch review**
+- [x] **Step 9: Request a whole-branch review**
 
 Use `superpowers:requesting-code-review` against the full diff from `main`, not task-by-task, on the most capable model available. This is not a formality: M2a's whole-branch review found a Critical that six per-task reviews structurally could not, and M2b's found four Importants including a hole in the design's own reasoning.
 
@@ -3804,11 +3804,11 @@ Point it at the seams:
 - If the second `SaveChangesAsync` inside `RecordAsync` throws, what state is left?
 - Do the client-side guards and the server-side refusals agree, especially on duplicate variants?
 
-- [ ] **Step 10: Address the findings, then merge**
+- [x] **Step 10: Address the findings, then merge**
 
 Use `superpowers:receiving-code-review` on whatever comes back — verify each finding before implementing it; do not agree performatively. Then `superpowers:finishing-a-development-branch`. Tag the merge `r1-m3`.
 
-- [ ] **Step 11: Tick this plan's boxes and commit it**
+- [x] **Step 11: Tick this plan's boxes and commit it**
 
 Mark every checkbox in this file, then:
 
