@@ -1,0 +1,11 @@
+# Secrets. This entry must exist before any build does.
+.env
+**/.env
+
+# Build output — copying it in would poison the restore
+**/bin/
+**/obj/
+
+# Test scratch
+**/TestResults/
+**/logs/

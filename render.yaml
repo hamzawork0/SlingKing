@@ -1,0 +1,59 @@
+# Render Blueprint. The services are declared here rather than clicked into the dashboard so
+# the configuration is readable, reviewable, and restorable — a deleted service is rebuilt
+# from this file instead of from memory.
+#
+# Secrets are NOT here. Every value marked `sync: false` must be set by hand in Render's
+# dashboard, which is what keeps them out of git.
+services:
+  - type: web
+    name: slingking-api
+    runtime: docker
+    plan: free
+    region: singapore          # Render has no India region; Singapore is nearest to Supabase ap-south-1
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/v1/health
+    autoDeploy: false          # Migrations run on startup. A merge must not change the client's live data.
+    envVars:
+      # --- Hard-required. The app throws on startup without these. ---
+      - key: SLINGKING_DB_RUNTIME
+        sync: false            # transaction pooler, port 6543, with Maximum Pool Size=5
+      - key: SLINGKING_DB_MIGRATION
+        sync: false            # session pooler, port 5432
+      - key: SLINGKING_JWT_SECRET
+        sync: false            # freshly generated — NOT the local development value
+      - key: SLINGKING_JWT_ISSUER
+        value: https://slingking-api.onrender.com
+      - key: SLINGKING_JWT_AUDIENCE
+        value: https://slingking-api.onrender.com
+      - key: SLINGKING_CORS_ORIGINS
+        value: https://slingking.onrender.com
+      # --- Not enforced by the app, but the client cannot log in without them. ---
+      # DatabaseSeeder returns SILENTLY when either is blank: the deploy goes green and
+      # nobody can sign in. See the spec's "silent failure" section.
+      - key: SLINGKING_SEED_ADMIN_EMAIL
+        sync: false
+      - key: SLINGKING_SEED_ADMIN_PASSWORD
+        sync: false
+      # SLINGKING_LOGIN_ATTEMPTS_PER_MINUTE is deliberately absent. Its fallback is already
+      # 10, the intended production value, so setting it adds a thing to get wrong.
+
+  - type: web
+    name: slingking
+    runtime: static
+    plan: free
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: ./frontend/dist
+    autoDeploy: false
+    envVars:
+      # Vite BAKES this into the bundle at build time. Changing it needs a rebuild, not a
+      # restart — editing the value alone does nothing.
+      - key: VITE_API_BASE_URL
+        value: https://slingking-api.onrender.com
+    routes:
+      # React Router serves /purchases and /inventory in the browser; those paths do not
+      # exist on disk. Without this, refreshing on any screen but the root returns 404 —
+      # and refreshing is behaviour every previous milestone verified working.
+      - type: rewrite
+        source: /*
+        destination: /index.html
