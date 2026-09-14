@@ -80,10 +80,6 @@ errors from a transaction-mode pooler.
 `SLINGKING_LOGIN_ATTEMPTS_PER_MINUTE` is deliberately left unset — its fallback
 is already the intended production value of 10.
 
-`MaxPoolSize` matters: Supabase allows this project **15 client connections in
-total**, shared with your development machine. Five leaves room to keep working
-while the app is in use.
-
 **The static site's only variable:**
 
 | Variable | Notes |

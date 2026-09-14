@@ -689,6 +689,8 @@ Expected: 155 integration, 87 unit, 37 frontend, zero warnings.
 
 Run `backup.ps1`. Migrations run on startup, so the first deploy is the last point of return.
 
+Do not skip this on the reasoning that a bad deploy just fails harmlessly. Free instances are replaced in place — the running one stops before the new one starts — so a failed deploy is an outage until you fix it or roll back, not a no-op.
+
 - [ ] **Step 3: Create the services from the Blueprint**
 
 In Render: **New → Blueprint**, connect the `SlingKing` repository, and let it read `render.yaml`.
@@ -698,13 +700,23 @@ In Render: **New → Blueprint**, connect the `SlingKing` repository, and let it
 - **Both names free:** the URLs in `render.yaml` are already correct. One pass.
 - **Either name taken:** note the real URLs, correct `SLINGKING_JWT_ISSUER`, `SLINGKING_JWT_AUDIENCE`, `SLINGKING_CORS_ORIGINS` and `VITE_API_BASE_URL` to match, commit, and redeploy **both** services. The frontend must be rebuilt, not restarted — its API URL is compiled in.
 
+  **Correct them in `render.yaml` and re-sync the Blueprint — not in Render's dashboard.** All four carry a `value:` in the Blueprint, which makes them Blueprint-managed: a dashboard edit works immediately and is silently reverted on the next sync, at which point every browser call starts failing CORS with nothing in the server log. The JWT pair is the forgiving one, since the same process mints and validates and any self-consistent value works. `SLINGKING_CORS_ORIGINS` is not: it is compared as an exact string, so a trailing slash on the origin blocks every browser request and produces no server-side error at all.
+
 - [ ] **Step 4: Fill in the secrets**
 
 In the API service's Environment tab, set the five `sync: false` values:
 
-`SLINGKING_DB_RUNTIME` (port **6543**, with `Maximum Pool Size=5`), `SLINGKING_DB_MIGRATION` (port **5432**), a freshly generated `SLINGKING_JWT_SECRET`, and `SLINGKING_SEED_ADMIN_EMAIL` / `SLINGKING_SEED_ADMIN_PASSWORD` for the owner's login.
+`SLINGKING_DB_RUNTIME` (port **6543**), `SLINGKING_DB_MIGRATION` (port **5432**), a freshly generated `SLINGKING_JWT_SECRET`, and `SLINGKING_SEED_ADMIN_EMAIL` / `SLINGKING_SEED_ADMIN_PASSWORD` for the owner's login.
+
+**Build both connection strings from `backend/.env.example`, not from memory.** The runtime string needs every one of these, and two of them fail quietly rather than loudly:
+
+`Host=…;Port=6543;Database=postgres;Username=postgres.<ref>;Password=…;SSL Mode=Require;Trust Server Certificate=true;No Reset On Close=true;Max Auto Prepare=0;Maximum Pool Size=5`
+
+Drop `Maximum Pool Size=5` and Npgsql defaults to 100 against Supabase's ceiling of 15 for this project: the deploy goes green, then requests start timing out under real use and your own machine is locked out at the same time. Drop `No Reset On Close=true` and Npgsql resets every connection it returns, which is the documented way to get intermittent errors from a transaction-mode pooler. The migration string is the same tail without those two and without `Max Auto Prepare=0`.
 
 Never reuse the local `SLINGKING_JWT_SECRET`. A secret that has lived in a developer's `.env` is not a production secret.
+
+**Use a `SLINGKING_SEED_ADMIN_EMAIL` that has never been seeded into `public`.** The seeder skips an email that already has a row and keeps that row's old password — see Step 6.
 
 - [ ] **Step 5: Deploy the API and watch the health check**
 
@@ -712,17 +724,37 @@ Trigger a manual deploy. Watch the log for the migration output, then for Render
 
 A deploy that builds but never goes live is almost always the health check failing — which means the container started but could not reach Supabase. Check the connection strings before suspecting the image.
 
-- [ ] **Step 6: Confirm the admin actually exists**
+**Then check, once, that the proxy is not forwarding a client-supplied address.** This is the one security property of Task 1 that no test can reach, because the test harness leaves the socket address null:
 
-**A green deploy is not evidence that anyone can log in.** Query the database directly — through Supabase's SQL editor or the MCP tooling:
+```bash
+curl -H "X-Forwarded-For: 1.2.3.4" https://<your-api>/api/v1/health
+```
+
+Read the request log line Render prints for it. It must show your real address. If it shows `1.2.3.4`, Render is passing the header through untouched instead of appending to it, and the login rate limiter is now partitioned on a value the caller chooses — a fresh fake address per attempt is a fresh bucket, so the ten-per-minute brake on password guessing is gone entirely. Nothing else will ever reveal this: no error, no log line, just a limiter that never fires. If it happens, say so and stop; the fix is a code change, not a setting.
+
+- [ ] **Step 6: Confirm the admin can actually sign in**
+
+**A green deploy is not evidence that anyone can log in — and neither is the admin row existing.** `DatabaseSeeder.SeedAdminUserAsync` returns without throwing in two different cases: when either seed variable is blank, and when a user with that email already exists. In the second case it keeps the existing password hash and silently discards the password you typed into Render. So the deploy is green, the health check passes, the row is right there in the table, and the only credential that works is one that lives on a developer's machine.
+
+The gate is a successful sign-in, not a row. Two checks, in this order:
 
 ```sql
 select id, email, created_at from public.users order by id;
 ```
 
-Expected: a row with the email you set in Step 4.
+A row whose `created_at` is older than this deploy means the seeder skipped it. Then sign in at the API with the exact credential you entered in Step 4:
 
-If it is missing, the seed variables were blank or misspelled. Everything else will look perfectly healthy. Fix the variables and redeploy; the seeder creates the user on the next startup.
+```bash
+curl -i -X POST https://<your-api>/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"<the email you set>","password":"<the password you set>"}'
+```
+
+Expected: **200** with a token. A **401** means the password in Render is not the password on that row.
+
+If either check fails, the fix depends on which one. Blank or misspelled variables: correct them and redeploy, and the seeder creates the user on the next startup. An email that was already seeded: either switch to an address that has never been used, or delete the row and redeploy. Deleting is safe — only `refresh_tokens.user_id` references `users` — but delete it from `public` deliberately, and take the backup in Step 2 first.
+
+There is no change-password screen, so a wrong password here is not something the client can recover from on their own.
 
 - [ ] **Step 7: Deploy the frontend and walk the app**
 
