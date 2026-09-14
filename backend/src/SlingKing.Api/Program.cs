@@ -101,9 +101,10 @@ builder.Services.AddRateLimiter(options =>
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.AddPolicy(AuthController.CredentialsRateLimitPolicy, http =>
         RateLimitPartition.GetFixedWindowLimiter(
-            // ponytail: partitions on the socket address. Behind a reverse proxy that is the
-            // proxy's IP and every visitor shares one bucket — add UseForwardedHeaders when
-            // this deploys behind one, or the limit becomes a self-inflicted outage.
+            // Partitions on the socket address. UseForwardedHeaders runs first in the pipeline
+            // (below), so behind Render this is the visitor's address and not the proxy's —
+            // without it every visitor would share one bucket and the limit would become a
+            // self-inflicted outage.
             http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
             {
@@ -192,7 +193,8 @@ var app = builder.Build();
 // than the proxy's.
 app.UseForwardedHeaders();
 
-// First in the pipeline, so nothing downstream can hand the client an exception. In
+// Ahead of everything that can throw, so nothing downstream can hand the client an
+// exception — only UseForwardedHeaders sits above it. In
 // Development the framework also inserts its own developer exception page ahead of this
 // one, but it never fires: this handler returns true, so the exception stops here.
 app.UseExceptionHandler();
@@ -221,6 +223,9 @@ await using (var migrationDb = new AppDbContext(
     new DbContextOptionsBuilder<AppDbContext>()
         .UseNpgsql(
             Required("SLINGKING_DB_MIGRATION"),
+            // No schema argument, so EF looks for the history table only in the connection's
+            // default schema: this app can migrate into `public` and nowhere else. Pinning a
+            // schema here is the prerequisite for ever giving development its own schema.
             npgsql => npgsql.MigrationsHistoryTable("__ef_migrations_history"))
         .UseSnakeCaseNamingConvention()
         .Options))
