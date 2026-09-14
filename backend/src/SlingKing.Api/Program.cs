@@ -198,7 +198,27 @@ app.UseForwardedHeaders();
 // Development the framework also inserts its own developer exception page ahead of this
 // one, but it never fires: this handler returns true, so the exception stops here.
 app.UseExceptionHandler();
-app.UseSerilogRequestLogging();
+// The default request log says what was requested but not by whom, which makes a production
+// incident unreadable — and behind a proxy "by whom" is exactly the value the login rate
+// limiter partitions on.
+//
+// ClientIp is what UseForwardedHeaders resolved. ForwardedFor is what remains of the header
+// AFTER that middleware, which deletes the entry it consumed — so the two together
+// reconstruct the original header and show which hop the limiter is actually counting.
+app.UseSerilogRequestLogging(options =>
+{
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        diagnosticContext.Set(
+            "ClientIp", httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+        diagnosticContext.Set(
+            "ForwardedFor", httpContext.Request.Headers["X-Forwarded-For"].ToString());
+    };
+
+    options.MessageTemplate =
+        "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms "
+        + "[client {ClientIp}] [xff {ForwardedFor}]";
+});
 
 if (!app.Environment.IsProduction())
 {
