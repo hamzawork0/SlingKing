@@ -118,6 +118,14 @@ public class ForwardedHeadersTests : IClassFixture<ForwardedHeadersTests.Throttl
 
         options.KnownNetworks.ShouldBeEmpty();
         options.KnownProxies.ShouldBeEmpty();
+
+        // Render puts three hops in X-Forwarded-For: the client, Cloudflare's egress, and its
+        // own internal address. The default limit of 1 stops on that internal address, which
+        // changes per connection — so the limiter partitioned every request separately and
+        // never fired. This is a configuration assertion for the same reason as the two above:
+        // TestServer leaves the socket address null, so no behavioural test can see the
+        // difference between walking one hop and walking three.
+        options.ForwardLimit.ShouldBe(3);
         options.ForwardedHeaders.HasFlag(ForwardedHeaders.XForwardedFor).ShouldBeTrue();
         options.ForwardedHeaders.HasFlag(ForwardedHeaders.XForwardedProto).ShouldBeTrue();
     }

@@ -178,10 +178,27 @@ builder.Services.AddSwaggerGen(options =>
 // installed, running, and silently useless. We cannot know the proxy's address in advance,
 // and only Render can reach this container, so trusting the hop it adds is the available
 // option.
+// ForwardLimit is the number of hops to walk back, and the default of 1 was silently wrong
+// here. Observed in production, a request arrives as:
+//
+//     X-Forwarded-For: <client>, <cloudflare egress>, <render internal>
+//
+// With a limit of 1 the middleware stops at the Render internal address — which differs per
+// connection, so the rate limiter gave every request its own bucket and never fired at all.
+// Confirmed by 26 sequential and 20 concurrent failed logins producing zero 429s.
+//
+// Three hops means a limit of 3. A client that sends its own X-Forwarded-For only prepends a
+// fourth entry on the left, which this never reaches, so the value stays unspoofable.
+//
+// ponytail: pinned to the observed hop count. If Render changes its topology this reads the
+// wrong entry — over-blocking if hops are added, which is loud. The robust fix is listing
+// Render and Cloudflare ranges in KnownNetworks and letting the middleware walk until it
+// finds an address it does not recognise; that is a maintained IP list, so not yet.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders =
         ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 3;
     options.KnownNetworks.Clear();
     options.KnownProxies.Clear();
 });
