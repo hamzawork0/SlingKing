@@ -41,7 +41,9 @@ services:
   - type: web
     name: slingking
     runtime: static
-    plan: free
+    # No `plan:` here. Static sites are served from the CDN and have no instance to size,
+    # so Render rejects the whole Blueprint with "no such plan free for service type web".
+    # The API above keeps its plan because it does run on an instance.
     buildCommand: cd frontend && npm ci && npm run build
     staticPublishPath: ./frontend/dist
     autoDeploy: false
